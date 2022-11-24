@@ -20,7 +20,7 @@ Every learner is required to do the following:
 # Tasks: (not in any particular order)
 
 - Review TCP Client test server
-- Create alogthrim for gnome sorting in NASM intel x86 64-bit structure
+- Create and test code using the alogthrim for gnome sorting in NASM intel x86 64-bit structure
 - Create TCP Client server
 - Make function(s) to make files and append files
 - Make function(s) to request data between 0x100 and 0x5FF from the server.
