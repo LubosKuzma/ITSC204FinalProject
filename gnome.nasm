@@ -1,3 +1,6 @@
+; Vincent Lo
+; 2022-11-24
+
 ;step one. See if you can print all numbers in the array.
     ; load the register with the array data
     ; interate through the array, convert each element of the array to ascii and print.
