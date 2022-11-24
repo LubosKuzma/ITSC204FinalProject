@@ -1,5 +1,6 @@
 ; Vincent Lo
 ; 2022-11-24
+; This is unfinished code
 
 ;step one. See if you can print all numbers in the array.
     ; load the register with the array data
