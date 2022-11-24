@@ -1,4 +1,4 @@
-# ITSC204FinalProject
+# ITSC204FinalProject (TEAM MOV)
 
 This is a repository for **ITSC 204 - Final Project** in Fall 2022.
 
