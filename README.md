@@ -17,3 +17,16 @@ Every learner is required to do the following:
   - the sort will use the gnome sorting algorithm
 - Append sorted information to file. 
 
+# Tasks: (not in any particular order)
+
+- Review TCP Client test server
+- Create alogthrim for gnome sorting in NASM intel x86 64-bit structure
+- Create TCP Client server
+- Make function(s) to make files and append files
+- Make function(s) to request data between 0x100 and 0x5FF from the server.
+  - Figure out how to store this data into an array using mmap/brk
+  - Figure out how to free heap allocation after finishing requirements
+
+# Start doucumentation of all steps taken and the understanding of them
+ 
+- We will need this for our presentation. Make sure to use correct commenting techniques when coding.
