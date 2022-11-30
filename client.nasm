@@ -14,6 +14,9 @@ global _start
 _start:
     call _network.init
     call _network.connect 
+    call _network.read
+    call _network.write
+    call _network.read_from_the_socket
     
 
 
@@ -47,8 +50,38 @@ _network:
         mov rsi,                            ; 
         mov rdx,                            ; 
         syscall 
-            
 
+
+
+    .read:
+        mov rax, 0x00                       ; read syscall
+        mov rdi, 0x00                       ; read buffer fd
+        mov rsi, msg_buf                    ; buffer pointer where message will be saved
+        mov rdx, 0x03                       ; message buffer size
+        syscall
+        
+        ret
+        
+    .write:
+        
+        mov rax, 0x01                       ; write syscall
+        mov rdi, qword[socket_fd]           ; socket file desctriptor
+        mov rsi, qword[msg_buf]             ; store message buffer pointer into rsi
+        mov rdx, 0x03                       ; store message buffer length into rdx
+        syscall
+
+        ret
+
+    .read_from_the_socket:
+
+        mov rax, 0x00                       ; read syscall
+        mov rdi, qword[socket_fd]           ; read socket fd into rdi
+        mov rsi, random_byte                ; move random_byte buffer into rsi
+        mov rdx, 1024                       ; move random_byte length into rdx
+        syscall
+        
+        ret       
+    
 _print:
     ; prologue
     push rbp
@@ -121,3 +154,7 @@ section .data
 
 section .bss
     socket_fd:               resq 1             ; socket file descriptor
+    read_buffer_fd           resq 1             ; file descriptor for read buffer
+    chars_received           resq 1             ; number of characters received from socket
+    msg_buf:                 resb 3             ; message buffer
+    random_byte:             resb 1024          ; reserve 1024 bytes
