@@ -1,0 +1,42 @@
+Author: Kolby MacDonald
+Date: 11/29/2022
+Purpose: To analyze the provided test_server_lh_8080.nasm program
+
+section .data
+    - contains connection success and failure messages
+    - contains usage message as well
+    - sockaddr_in?
+
+section .bss
+    - reserves space for checksums used late
+
+_start:
+    -SIGPIPE Set to ignore
+    -Call _network.init:
+        - Bind to socket using IF_INET
+        - If failed Bind using sockaddr
+        - Send failure or success message
+    -Call _network.listen:
+        - Listen for connection
+        - Print success message
+* Confused how the program continues from here but i think it goes into the following.
+    -.retry?
+        -connection = true 
+        -print hello message
+        -write text to socket
+            -? maybe to capture an enter or something?
+    -.net_read_loop
+        -tell the user to enter their message
+    -.net_read_loop_nomsg
+        -confirm characters recieved
+        -check for command
+            -compare string to string in a register
+            -if valid: returns command number
+                -cmd_1_exit_l, cmd_2_do_something_else
+        -1: command is cmd_1_exit_l
+            - exit (done by comparing command number and jumping to exit)
+        -2: command is cmd_2_do_something_else continue
+            -remove '\n' from chars
+            -convert ascii chars in buffer to hex
+        -if everything is valid
+            -end
