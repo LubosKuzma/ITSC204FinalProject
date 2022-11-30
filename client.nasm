@@ -139,14 +139,14 @@ _network:
 
         mov rax, 0x2E
         mov rdi, qword [socket_fd]
-        mov rsi, []
+        mov rsi, 
         mov rdx, 
         syscall
 
     .recieve:  ; still working on
 
         mov rax, 0x2F
-        mov rdi, qword [soket_fd]
+        mov rdi, qword [socket_fd]
         mov rsi,    
         mov rdx,
         syscall
@@ -170,22 +170,54 @@ _file:  ; working
  
 
     .write:                                 ; write to the file
+
+        ; prologue
+        push rbp
+        mov rbp, rsp
+        push rdi
+        push rsi
+
        
         mov rax, 0x1
         mov rdi, [file_fd]
-        mov rsi,                            ; data to write to file
-        mov rdx,                            ; lenght of the data                    
+        mov rsi, [rbp + 0x10]                          ; data to write to file
+        mov rdx, [rbp + 0x18]                        ; lenght of the data                    
         syscall
-        ret
+
+    ; [rbp + 0x10] -> buffer pointer
+    ; [rbp + 0x18] -> buffer length
+
+        ; epilogue
+        pop rsi
+        pop rdi
+        pop rbp
+        ret 0x10                                ; clean up the stack upon return - not strictly following C Calling Convention
+
+
    
     .read:                                  ; read from the file
-        
+
+        ; prologue
+        push rbp
+        mov rbp, rsp
+        push rdi
+        push rsi
+
+
         mov rax, 0x0
         mov rdi, [file_fd]
-        mov rsi,                            ; buffer to store data read from file
-        mov rdx,                            ; length of data to read from file                        
+        mov rsi, [rbp + 0x10]                         ; buffer to store data read from file
+        mov rdx, [rbp + 0x18]                         ; length of data to read from file                        
         syscall 
-        ret
+
+    ; [rbp + 0x10] -> buffer pointer
+    ; [rbp + 0x18] -> buffer length
+
+        ; epilogue
+        pop rsi
+        pop rdi
+        pop rbp
+        ret 0x10   
 
     .close:                                 ; close the file
 
@@ -237,20 +269,6 @@ _socket_created:
     ; print socket created
     push socket_t_msg_l
     push socket_t_msg
-    call _print
-    ret
-
-_bind_failed:
-    ; print bind failed
-    push bind_f_msg_l
-    push bind_f_msg
-    call _print
-    jmp _exit
-
-_bind_created:
-    ; print bind created
-    push bind_t_msg_l
-    push bind_t_msg
     call _print
     ret
 
