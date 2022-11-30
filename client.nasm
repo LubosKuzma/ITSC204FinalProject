@@ -1,4 +1,5 @@
 
+
 SIGPIPE equ 0xD
 SIG_IGN equ 0x1
 NULL    equ 0x0
@@ -122,7 +123,7 @@ _network:
         call _socket_created
         ret
 
-    .connection:        ; still working
+    .connection:        ;  working
         ; connecting to the server
         mov rax, 0x2A                       ; connect syscall
         mov rdi, qword [socket_fd]          ; sfd 
@@ -255,29 +256,29 @@ _bind_created:
 
 _connection_failed:
      ; print connection failed
-     push connection_f_msg
      push connection_f_msg_l
+     push connection_f_msg
      call _print
      ret
 
 _connection_success:
      ; print connection successfully created
-     push connection_t_msg
      push connection_t_msg_l
+     push connection_t_msg
      call _print
      ret
 
 _file_notCreated:
     ; print file not Created
-    push fileCre_f_msg
     push fileCre_f_msg_l
+    push fileCre_f_msg
     call _print
     ret
 
 _file_created:
     ; print file Created
-    push fileCre_t_msg
     push fileCre_t_msg_l
+    push fileCre_t_msg
     call _print
     ret
 
