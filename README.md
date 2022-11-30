@@ -25,8 +25,9 @@ Every learner is required to do the following:
 - Create TCP Client server
 - Make function(s) to make files and append files
 - Make function(s) to request data between 0x100 and 0x5FF from the server.
-  - Figure out how to store this data into an array using mmap/brk
+  - Figure out how to store this data into an array heap. Can be .bss section or mmap
   - Figure out how to free heap allocation after finishing requirements
+ - Combine client server and gnome sort program together and get it working.
 
 # Start doucumentation of all steps taken and the understanding of them
  
