@@ -8,12 +8,26 @@
 ; 
 ; *******************************
 
+
+;*****************************
+struc sockaddr_in_type
+; defined in man ip(7) because it's dependent on the type of address
+    .sin_family:        resw 1
+    .sin_port:          resw 1
+    .sin_addr:          resd 1
+    .sin_zero:          resd 2          ; padding       
+endstruc
+
+;*****************************
+
+
 section .text
 global _start
 
 _start:
     call _network.init
     call _network.connect 
+
     call _network.read
     call _network.write
     call _network.read_from_the_socket
@@ -37,7 +51,8 @@ _network:
         mov rdi, 0x02                       ; int domain - AF_INET = 2
         mov rsi, 0x01                       ; int type - SOCK_STREAM = 1
         mov rdx, 0x00                       ; int protocol is 0
-        syscall     
+        syscall   
+
         cmp rax, 0x00
         jl _socket_failed                   ; jump if negative
         mov [socket_fd], rax                ; save the socket fd 
@@ -46,10 +61,15 @@ _network:
 
     .connect:
         mov rax, 0x2A                       ; connect syscall
-        mov rdi, qword[socket_fd]           ; 
-        mov rsi,                            ; 
-        mov rdx,                            ; 
+        mov rdi, qword[socket_fd]           ; (sfd) socket file descriptor
+        mov rsi, sockaddr_in                ; sockaddr struct pointer           
+        mov rdx, sockaddr_in_l              ; address length 
         syscall 
+
+        cmp rax, 0x00
+        jl _connect_failed                  ; jump if negative
+        call _connect_created
+        ret
 
 
 
@@ -119,6 +139,20 @@ _socket_created:
     call _print
     ret    
 
+_connect_failed:
+    ; print connect failed
+    push connect_f_msg_l
+    push connect_f_msg
+    call _print
+    jmp _exit
+
+_connect_created:
+    ; print connect created
+    push connect_t_msg_l
+    push connect_t_msg
+    call _print
+    ret      
+
 _exit:
     mov rax, 60
     mov rdi, 0
@@ -132,6 +166,12 @@ section .data
 
     socket_t_msg:   db "Socket created.", 0xA, 0x0
     socket_t_msg_l: equ $ - socket_t_msg
+
+    connect_f_msg:   db "Connect failed to be created.", 0xA, 0x0
+    connect_f_msg_l: equ $ - connect_f_msg
+
+    connect_t_msg:   db "Connect created.", 0xA, 0x0
+    connect_t_msg_l: equ $ - connect_t_msg    
 
 
 
