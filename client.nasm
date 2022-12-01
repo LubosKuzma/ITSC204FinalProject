@@ -185,13 +185,6 @@ _sort:
     jmp .InsertionLoop
     .InsertionLoopEnd:
 
-
-    mov rax, 0x1                                    ; Write space to separate the printing of each prime number                     
-    mov rdi, 0x1
-    mov rsi, output                    
-    mov rdx, 0x10
-    syscall
-
     mov rsp, rbp                        ; Epilogue
     pop rbp
 
