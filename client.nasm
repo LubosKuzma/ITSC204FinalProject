@@ -7,45 +7,47 @@ struc sockaddr_in_type
 endstruc
 
 section .bss
-    sock resw 2
-    client resw 2
-    echobuf resb 256
-    read_count resw 2
+    ; global variables
+    socket_fd:               resq 1             ; socket file descriptor
 
 section .data
 
-    sock_err_msg        db "Failed to initialize socket", 0x0a, 0x00
-    sock_err_msg_len    equ $ - sock_err_msg
+    socket_t_msg:   db "Socket created.", 0xA, 0x0
+    socket_t_msg_l: equ $ - socket_t_msg
 
-    connect_err_msg        db "Failed to connect socket", 0x0a, 0x00
-    connect_err_msg_len    equ $ - connect_err_msg
+    socket_f_msg:   db "Socket failed to be created.", 0xA, 0x0
+    socket_f_msg_l: equ $ - socket_f_msg
+
+    bind_f_msg:   db "Socket failed to bind.", 0xA, 0x0
+    bind_f_msg_l: equ $ - bind_f_msg
+
+    bind_t_msg:   db "Socket bound.", 0xA, 0x0
+    bind_t_msg_l: equ $ - bind_t_msg
 
     sockaddr_in: 
         istruc sockaddr_in_type 
 
             at sockaddr_in_type.sin_family,  dw 0x02            ;AF_INET -> 2 
-            at sockaddr_in_type.sin_port,    dw 0x27D9          ;(DEFAULT, passed on stack) port in hex and big endian order, 8080 -> 0x901F
-            at sockaddr_in_type.sin_addr,    dd 0xb886ee8c            ;(DEFAULT) 00 -> any address, address 127.0.0.1 -> 0x0100007F
+            at sockaddr_in_type.sin_port,    dw 0xD827          ;(DEFAULT, passed on stack) port in hex and big endian order, 8080 -> 0x901F
+            at sockaddr_in_type.sin_addr,    dd 0xb886ee8c       ;(DEFAULT) 00 -> any address, address 127.0.0.1 -> 0x0100007F
 
         iend
     sockaddr_in_l: equ $ - sockaddr_in
 
- section .text
+section .text
     global _start
 
- ;; Client main entry point
 _start:
+    ; Initialize socket value to 0, used for cleanup 
+    mov      word [socket_fd], 0
+
+    ; Initialize socket
+    call     _socket
+    jmp _close_sock
+
+_socket:
     push rbp
     mov rbp, rsp
-;; Initialize socket value to 0, used for cleanup 
-mov      word [sock], 0
-
-;; Initialize socket
-call     _socket
-
-;; Performs a sys_socket call to initialise a TCP/IP socket. 
-;; Stores the socket file descriptor in the sock variable
-_socket:
     ; socket, based on IF_INET to get tcp
     mov rax, 0x29                       ; socket syscall
     mov rdi, 0x02                       ; int domain - AF_INET = 2, AF_LOCAL = 1
@@ -54,7 +56,7 @@ _socket:
     syscall     
     cmp rax, 0x00
     jl _socket_failed                   ; jump if negative
-    mov [socket_fd], rax                 ; save the socket fd to basepointer
+    mov [socket_fd], rax                ; save the socket fd to basepointer
     call _socket_created
 
     ; bind, use sockaddr_in struct
@@ -68,62 +70,68 @@ _socket:
     cmp rax, 0x00
     jl _bind_failed
     call _bind_created
+
+    ; epilogue
+    mov rsp, rbp
+    pop rbp
     ret
 
-;; Check if socket was created successfully
-cmp        rax, 0
-jle        _socket_fail
+_print:
+    ; prologue
+    push rbp
+    mov rbp, rsp
+    push rdi
+    push rsi
 
-;; Store the new socket descriptor 
-mov        [sock], rax
+    ; [rbp + 0x10] -> buffer pointer
+    ; [rbp + 0x18] -> buffer length
+    
+    mov rax, 0x1
+    mov rdi, 0x1
+    mov rsi, [rbp + 0x10]
+    mov rdx, [rbp + 0x18]
+    syscall
 
-ret
+    ; epilogue
+    pop rsi
+    pop rdi
+    pop rbp
+    ret 0x10 
 
-;; Performs sys_close on the socket in rdi
+_socket_failed:
+    ; print socket failed
+    push socket_f_msg_l
+    push socket_f_msg
+    call _print
+    jmp _exit
+
+_socket_created:
+    ; print socket created
+    push socket_t_msg_l
+    push socket_t_msg
+    call _print
+    ret
+
+_bind_failed:
+    ; print bind failed
+    push bind_f_msg_l
+    push bind_f_msg
+    call _print
+    jmp _exit
+
+_bind_created:
+    ; print bind created
+    push bind_t_msg_l
+    push bind_t_msg
+    call _print
+    ret
+
+; Performs sys_close on the socket in rdi
 _close_sock:
-mov     rax, 3        ; SYS_CLOSE
-syscall
+    mov     rax, 3        ; SYS_CLOSE
+    syscall
 
-ret
-
-;; Error Handling code
-;; _*_fail loads the rsi and rdx registers with the appropriate
-;; error messages for given system call. Then call _fail to display the
-;; error message and exit the application.
-_socket_fail:
-   mov     rsi, sock_err_msg
-   mov     rdx, sock_err_msg_len
-   call    _fail
-;; Calls the sys_write syscall, writing an error message to stderr, then 
-;; exits
-;; the application. rsi and rdx must be loaded with the error message and
-;; length of the error message before calling _fail
-_fail:
-mov        rax, 1 ; SYS_WRITE
-mov        rdi, 2 ; STDERR
-syscall
-
-mov        rdi, 1
-call       _exit
-
- ;; Exits cleanly, checking if the listening or client sockets need to be 
- ;; closed
- ;; before calling sys_exit
 _exit:
-mov        rax, [sock]
-cmp        rax, 0
-je         .client_check
-mov        rdi, [sock]
-call       _close_sock
-
-.client_check:
-mov        rax, [client]
-cmp        rax, 0
-je         .perform_exit
-mov        rdi, [client]
-call       _close_sock
-
-.perform_exit:
-mov        rax, 60
-mov        rdi, 0
-syscall
+    mov rax, 0x3C       ; sys_exit
+    mov rdi, 0x00       ; return code  
+    syscall
