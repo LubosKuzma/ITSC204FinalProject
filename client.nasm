@@ -35,6 +35,8 @@ section .data
 
  ;; Client main entry point
 _start:
+    push rbp
+    mov rbp, rsp
 ;; Initialize socket value to 0, used for cleanup 
 mov      word [sock], 0
 
@@ -44,11 +46,29 @@ call     _socket
 ;; Performs a sys_socket call to initialise a TCP/IP socket. 
 ;; Stores the socket file descriptor in the sock variable
 _socket:
-mov         rax, 41     ; SYS_SOCKET
-mov         rdi, 2      ; AF_INET
-mov         rsi, 1      ; SOCK_STREAM
-mov         rdx, 0    
-syscall
+    ; socket, based on IF_INET to get tcp
+    mov rax, 0x29                       ; socket syscall
+    mov rdi, 0x02                       ; int domain - AF_INET = 2, AF_LOCAL = 1
+    mov rsi, 0x01                       ; int type - SOCK_STREAM = 1
+    mov rdx, 0x00                       ; int protocol is 0
+    syscall     
+    cmp rax, 0x00
+    jl _socket_failed                   ; jump if negative
+    mov [socket_fd], rax                 ; save the socket fd to basepointer
+    call _socket_created
+
+    ; bind, use sockaddr_in struct
+    ;       int bind(int sockfd, const struct sockaddr *addr,
+    ;            socklen_t addrlen);
+    mov rax, 0x31                       ; bind syscall
+    mov rdi, qword [socket_fd]          ; sfd
+    mov rsi, sockaddr_in                ; sockaddr struct pointer
+    mov rdx, sockaddr_in_l              ; address length 
+    syscall
+    cmp rax, 0x00
+    jl _bind_failed
+    call _bind_created
+    ret
 
 ;; Check if socket was created successfully
 cmp        rax, 0
