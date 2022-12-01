@@ -1,8 +1,5 @@
 
 
-SIGPIPE equ 0xD
-SIG_IGN equ 0x1
-NULL    equ 0x0
 
 ;*****************************
 struc sockaddr_in_type
@@ -44,21 +41,28 @@ section .data
 
     fileCre_t_msg: db "File Created.", 0xA, 0x0
     fileCre_t_msg_l: equ $ - fileCre_t_msg
-    
+
+    message_sent: db "Message sent to server.", 0xA, 0x0
+    message_sent_l: equ $ - message_sent
+
+    message_sent_f: db "Failed to send message to server.", 0xA, 0x0
+    message_sent_f_l: equ $ - message_sent_f
+
+
     filename: db "Data.txt",0x0
     filename_l: equ $ - filename
 
-    ; list of commands
+    banner: db "Enter number between 100 and 4FF to retrieve data from server: ", 0x00
+    banner_l: equ $ - banner
 
-    cmd_1_exit: db "exit", 0x0A
-    cmd_1_exit_l: equ $ - cmd_1_exit
+
 
     sockaddr_in: 
         istruc sockaddr_in_type 
 
             at sockaddr_in_type.sin_family,  dw 0x02            ;AF_INET -> 2 
-            at sockaddr_in_type.sin_port,    dw 0x1E72         ;(DEFAULT, passed on stack) port in hex and big endian order, 10209 -> 0x1E72
-            at sockaddr_in_type.sin_addr,    dd 0x8B68EEC8       ;(DEFAULT) 00 -> any address, address 140.238.134.184 -> 0x8B68EEC8 
+            at sockaddr_in_type.sin_port,    dw 0xE127        ;(DEFAULT, passed on stack) port in hex and big endian order, 10209 -> 0xE127
+            at sockaddr_in_type.sin_addr,    dd 0xB886EE8C       ;(DEFAULT) 00 -> any address, address 140.238.134.184 -> 0xB886EE8C 
 
         iend
     sockaddr_in_l:  equ $ - sockaddr_in
@@ -70,38 +74,47 @@ section .bss
     ; global variables
     file_fd                  resq 1             ; file opened file descriptor
     socket_fd:               resq 1             ; socket file descriptor
+    client_fd                resq 1             ; client file descriptor
+    message_buf              resb 1024          ; store data recieved from server
+    number                   resq 4             ; number sent to server
+    message_buf_l            resq 4             ; length of message recieved from server
 
 
 section .text
     global _start
-    extern sigaction
  
 _start:
-    push rbp
-    mov rbp, rsp
-
-
-    ; set the SIGPIPE signal to ignore
-    mov rdi, rsp
-    push SIG_IGN        ; new action -> SIG_IGN 
-    mov rsi, rsp        ; pointer to action struct
-    mov edx, NULL       ; old action -> NULL
-    mov edi, SIGPIPE    ; SIGPIPE    
-    mov rax, 0xD        ; rt_sigaction syscall
-    mov r10, 0x8        ; size of struc (8 bytes)
-    syscall
-
-    add rsp, 0x8        ; restore stack
 
 
     call _network.init  ; netowrk in intillaized 
 
     call _network.connection    ; connecting to the server
 
-    call _file.open
+    push banner_l 
+    push banner
+    call _print         ; printing banner 
 
-   ; call _file.write
+    push 0x4
+    push number
+    call _read          ; taking input from the user for data to be retrieved from server
 
+    call _network.send   ; sending message to the server
+
+    call _network.recieve   ; recieving message from the server 
+
+    call _network.recieve
+
+    mov [message_buf_l], rax   ; storing number of bytes of data recieved from server to variabel
+
+    call _file.create         ; opening a file name data.txt
+
+    push qword[message_buf_l]
+    push message_buf
+    call _file.write        ; writing data recieved from the server to the file
+
+
+    call _network.close     ; closing the socket
+    call _file.close        ; closing the file 
     jmp _exit
         
 
@@ -123,7 +136,7 @@ _network:
         call _socket_created
         ret
 
-    .connection:        ;  working
+    .connection:        
         ; connecting to the server
         mov rax, 0x2A                       ; connect syscall
         mov rdi, qword [socket_fd]          ; sfd 
@@ -131,34 +144,52 @@ _network:
         mov rdx, sockaddr_in_l              ; sockaddr length
         syscall
         cmp rax, 0x00                       ; checking if connection successful
+
         jl _connection_failed               ; failed
         call _connection_success            ; successful
+        mov [client_fd], rax
         ret
 
-    .send:      ; still working on
+    .send:      
+        ; sending message to server
 
-        mov rax, 0x2E
+        mov rax, 0x1
         mov rdi, qword [socket_fd]
-        mov rsi, 
-        mov rdx, 
+        mov rsi, number
+        mov rdx, 0x4
         syscall
 
-    .recieve:  ; still working on
+        cmp rax, 0x0
+        jl _message_sent_f
+        call _message_sent
+        ret
 
-        mov rax, 0x2F
+    .recieve:  
+        ; recieving data from the server
+
+        mov rax, 0x0
         mov rdi, qword [socket_fd]
-        mov rsi,    
-        mov rdx,
+        mov rsi,  message_buf   
+        mov rdx,   1024
         syscall
+        ret
+
+    .close:  ; closing the socket
+        
+        mov rax, 0x3
+        mov rdi, qword[client_fd]
+        syscall
+        call _socket_closed
+        ret
 
 
-_file:  ; working 
+_file:  
 
     .create:                                  ; creating file
    
         mov rax, 0x55
         mov rdi, filename
-        mov rsi, 0777                           ; read, write and execution to all                 
+        mov rsi, 511                           ; (permissions) read and write to owner, read to all                 
         syscall
         
         cmp rax, 0x0
@@ -227,12 +258,33 @@ _file:  ; working
         ret
 
 
-_Array:                                     ; array to store the data from server
 
 
-_QuickSort:                                 ; to sort data in decreasing order 
 
 
+_read:
+        
+    ; prologue
+    push rbp
+    mov rbp, rsp
+    push rdi
+    push rsi
+
+    ; [rbp + 0x10] -> buffer pointer
+    ; [rbp + 0x18] -> buffer length
+
+    mov rax, 0x0
+    mov rdi, 0x0
+    mov rsi, [rbp + 0x10]
+    mov rdx, [rbp + 0x18]
+    syscall
+
+
+    ; epilogue
+    pop rsi
+    pop rdi
+    pop rbp
+    ret 0x10
 
 _print:
     ; prologue
@@ -277,7 +329,7 @@ _connection_failed:
      push connection_f_msg_l
      push connection_f_msg
      call _print
-     ret
+     jmp _exit
 
 _connection_success:
      ; print connection successfully created
@@ -291,7 +343,7 @@ _file_notCreated:
     push fileCre_f_msg_l
     push fileCre_f_msg
     call _print
-    ret
+    jmp _exit
 
 _file_created:
     ; print file Created
@@ -300,11 +352,31 @@ _file_created:
     call _print
     ret
 
+_message_sent:
+    ;print message sent to server
+    push message_sent_l
+    push message_sent
+    call _print 
+    ret
+
+_message_sent_f:
+    ;print message sent to server
+    push message_sent_f_l
+    push message_sent_f
+    call _print 
+    ret
+
+
+_socket_closed:
+    ; print socket closed
+    push socket_closed_msg_l
+    push socket_closed_msg
+    call _print
+    ret
 
 
 
 _exit:
-
 
     mov rax, 0x3C       ; sys_exit
     mov rdi, 0x00       ; return code  
