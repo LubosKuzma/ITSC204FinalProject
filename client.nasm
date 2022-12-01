@@ -8,7 +8,7 @@ endstruc
 
 section .bss
     ; global variables
-    socket_fd:               resq 1             ; socket file descriptor
+    socket_fd: resq 1             ; socket file descriptor
 
 section .data
 
@@ -23,6 +23,12 @@ section .data
 
     bind_t_msg:   db "Socket bound.", 0xA, 0x0
     bind_t_msg_l: equ $ - bind_t_msg
+
+    connection_f_msg:   db "Connection failed.", 0xA, 0x0
+    connection_f_msg_l: equ $ - connection_f_msg
+
+    connection_t_msg:   db "Connection created.", 0xA, 0x0
+    connection_t_msg_l: equ $ - connection_t_msg
 
     sockaddr_in: 
         istruc sockaddr_in_type 
@@ -39,11 +45,11 @@ section .text
 
 _start:
     ; Initialize socket value to 0, used for cleanup 
-    mov      word [socket_fd], 0
+    mov word [socket_fd], 0
 
     ; Initialize socket
-    call     _socket
-    jmp _close_sock
+    call _socket
+    jmp _exit
 
 _socket:
     push rbp
@@ -59,17 +65,20 @@ _socket:
     mov [socket_fd], rax                ; save the socket fd to basepointer
     call _socket_created
 
-    ; bind, use sockaddr_in struct
-    ;       int bind(int sockfd, const struct sockaddr *addr,
-    ;            socklen_t addrlen);
-    mov rax, 0x31                       ; bind syscall
-    mov rdi, qword [socket_fd]          ; sfd
-    mov rsi, sockaddr_in                ; sockaddr struct pointer
-    mov rdx, sockaddr_in_l              ; address length 
+    ; int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+    mov rax, 0x2A                        ; connect syscall
+    mov rdi, qword [socket_fd]
+    mov rsi, sockaddr_in
+    mov rdx, sockaddr_in_l
     syscall
     cmp rax, 0x00
-    jl _bind_failed
-    call _bind_created
+    jl _connection_failed
+    ;call _connection_created
+
+    ; Close socket
+    mov rax, 0x3                        ; close syscall
+    mov rdi, qword [socket_fd]     
+    syscall
 
     ; epilogue
     mov rsp, rbp
@@ -126,10 +135,18 @@ _bind_created:
     call _print
     ret
 
-; Performs sys_close on the socket in rdi
-_close_sock:
-    mov     rax, 3        ; SYS_CLOSE
-    syscall
+_connection_failed:
+    ; print connection failed
+    push connection_f_msg_l
+    push connection_f_msg
+    call _print
+    jmp _exit
+
+_connection_created:
+    push connection_t_msg_l
+    push connection_t_msg
+    call _print
+    ret
 
 _exit:
     mov rax, 0x3C       ; sys_exit
