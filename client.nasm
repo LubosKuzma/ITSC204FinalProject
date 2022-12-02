@@ -6,11 +6,13 @@ struc sockaddr_in_type
     .sin_zero   resd 2
 endstruc
 
-section .bss
-    ; global variables
-    socket_fd: resq 1             ; socket file descriptor
+MSG_DONTWAIT equ 0x40
+MSG_WAITALL equ 0x100
 
 section .data
+
+    send_command:   db "100", 0xA   ; DO NOT TERMINATE WITH 0x00
+    send_command_l: equ $ - send_command
 
     socket_t_msg:   db "Socket created.", 0xA, 0x0
     socket_t_msg_l: equ $ - socket_t_msg
@@ -18,43 +20,53 @@ section .data
     socket_f_msg:   db "Socket failed to be created.", 0xA, 0x0
     socket_f_msg_l: equ $ - socket_f_msg
 
-    bind_f_msg:   db "Socket failed to bind.", 0xA, 0x0
-    bind_f_msg_l: equ $ - bind_f_msg
-
-    bind_t_msg:   db "Socket bound.", 0xA, 0x0
-    bind_t_msg_l: equ $ - bind_t_msg
-
     connection_f_msg:   db "Connection failed.", 0xA, 0x0
     connection_f_msg_l: equ $ - connection_f_msg
 
     connection_t_msg:   db "Connection created.", 0xA, 0x0
     connection_t_msg_l: equ $ - connection_t_msg
 
+    file_name: db 'output.txt', 0x00
+    file_name_l: equ $ - file_name
+
+    file_f_msg: db "File failed to be created", 0xA, 0x00
+    file_f_msg_l: equ $ - file_f_msg
+
+    write_t: db "Requested bytes were written to file: output.txt", 0xA, 0x00
+    write_t_len: equ $ - write_t
+
+    write_f: db "Requested bytes failed to be written to file: output.txt", 0xA, 0x00
+    write_f_len: equ $ - write_f
+
     sockaddr_in: 
         istruc sockaddr_in_type 
 
             at sockaddr_in_type.sin_family,  dw 0x02            ;AF_INET -> 2 
-            at sockaddr_in_type.sin_port,    dw 0xD927          ;(DEFAULT, passed on stack) port in hex and big endian order, 8080 -> 0x901F
-            at sockaddr_in_type.sin_addr,    dd 0xb886ee8c       ;(DEFAULT) 00 -> any address, address 127.0.0.1 -> 0x0100007F
+            at sockaddr_in_type.sin_port,    dw 0x901F          ;(DEFAULT, passed on stack) port in hex and big endian order, 8080 -> 0x901F
+            at sockaddr_in_type.sin_addr,    dd 0x00            ;(DEFAULT) 00 -> any address, address 127.0.0.1 -> 0x0100007F
 
         iend
     sockaddr_in_l: equ $ - sockaddr_in
+
+section .bss
+    ; global variables
+    rec_buffer: resb 0x101
+    socket_fd:  resq 1                  ; socket file descriptor
+    output_fd: resb 1
 
 section .text
     global _start
 
 _start:
-    ; Initialize socket value to 0, used for cleanup 
-    mov word [socket_fd], 0
-
-    ; Initialize socket
     call _socket
+    call _send_rec
+    call _file
+    call _close_socket
+    
     jmp _exit
 
 _socket:
-    push rbp
-    mov rbp, rsp
-    ; socket, based on IF_INET to get tcp
+    ; Initialize socket, based on IF_INET to get tcp
     mov rax, 0x29                       ; socket syscall
     mov rdi, 0x02                       ; int domain - AF_INET = 2, AF_LOCAL = 1
     mov rsi, 0x01                       ; int type - SOCK_STREAM = 1
@@ -73,16 +85,57 @@ _socket:
     syscall
     cmp rax, 0x00
     jl _connection_failed
-    ;call _connection_created
-
-    ; Close socket
-    mov rax, 0x3                        ; close syscall
-    mov rdi, qword [socket_fd]     
+    call _connection_created
+    ret
+ 
+_send_rec:
+    ; based on sendto syscall
+    mov rax, 0x2C                       ; sendmsg syscall
+    mov rdi, [socket_fd]                       ; int fd
+    mov rsi, send_command                      ; int type - SOCK_STREAM = 1
+    mov rdx, send_command_l                       ; int protocol is 0
+    mov r10, MSG_DONTWAIT
+    mov r8, sockaddr_in
+    mov r9, sockaddr_in_l
     syscall
 
-    ; epilogue
-    mov rsp, rbp
-    pop rbp
+    ; using receivefrom syscall
+    mov rax, 0x2D
+    mov rdi, [socket_fd]
+    mov rsi, rec_buffer
+    mov rdx, 0x100                      ; must match the requested number of bytes
+    mov r10, MSG_WAITALL                ; important
+    mov r8, 0x00
+    mov r9, 0x00
+    syscall
+    .rec:                               ; setup break in gdb by "b _send_rec.rec" to examine the buffer
+    ; your rec_buffer will now be filled with 0x100 bytes
+    ret
+
+_file:
+    ; Create new output file
+    mov rax, 0x55        ; creat() syscall
+    mov rdi, file_name   ; File name
+    mov rsi, 0777        ; file mode (read, write and execute)
+    syscall
+    cmp rax, 0x00
+    jl _file_not_created
+    mov [output_fd], rax
+
+    ; Write to file
+    mov	rax, 0x01            ;system call number (sys_write)
+    mov	rdi, [output_fd]     ;file descriptor
+    mov	rsi, rec_buffer          ;message to write 
+    mov	rdx, 0x100           ;number of bytes
+    syscall
+    cmp rax, 0x00
+    jl _write_fail
+    call _write_success
+
+    ; Close file
+    mov rax, 0x3                        ; close syscall
+    mov rdi, qword [output_fd]     
+    syscall
     ret
 
 _print:
@@ -121,20 +174,6 @@ _socket_created:
     call _print
     ret
 
-_bind_failed:
-    ; print bind failed
-    push bind_f_msg_l
-    push bind_f_msg
-    call _print
-    jmp _exit
-
-_bind_created:
-    ; print bind created
-    push bind_t_msg_l
-    push bind_t_msg
-    call _print
-    ret
-
 _connection_failed:
     ; print connection failed
     push connection_f_msg_l
@@ -146,6 +185,32 @@ _connection_created:
     push connection_t_msg_l
     push connection_t_msg
     call _print
+    ret
+
+_file_not_created:
+    push file_f_msg_l
+    push file_f_msg
+    call _print
+    jmp _exit
+
+_write_success:
+    ; Write to stdout that bytes are writen to file
+    push write_t_len
+    push write_t
+    call _print
+    ret
+
+_write_fail:
+    push write_f_len
+    push write_f
+    call _print
+    jmp _exit
+
+_close_socket:
+    ; Close socket
+    mov rax, 0x3                        ; close syscall
+    mov rdi, qword [socket_fd]     
+    syscall
     ret
 
 _exit:
