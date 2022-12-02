@@ -38,6 +38,8 @@ section .data
     write_f: db "Requested bytes failed to be written to file: output.txt", 0xA, 0x00
     write_f_len: equ $ - write_f
 
+    print_statement: db "%d", 0xA, 0x00
+
     sockaddr_in: 
         istruc sockaddr_in_type 
 
@@ -55,8 +57,12 @@ section .bss
     output_fd: resb 1
 
 section .text
+    ;default rel
+    ;global main
     global _start
+    ;extern printf
 
+;main:
 _start:
     call _socket
     call _send_rec
@@ -123,6 +129,7 @@ _file:
     mov [output_fd], rax
 
     ; Write to file
+    ;call _printf
     mov	rax, 0x01            ;system call number (sys_write)
     mov	rdi, [output_fd]     ;file descriptor
     mov	rsi, rec_buffer          ;message to write 
@@ -137,6 +144,17 @@ _file:
     mov rdi, qword [output_fd]     
     syscall
     ret
+
+;_printf:
+;    push rbp                    ; prologue
+;    mov rbp, rsp
+;    mov rdi, print_statement    ; load print_statement
+;    mov rsi, [rec_buffer]       ; 
+;    mov rax, 0                  ; clear rax
+;    call printf wrt ..plt       ; call printf function
+;    mov rsp, rbp                ; epilogue
+;    pop rbp
+;    ret 
 
 _print:
     ; prologue
