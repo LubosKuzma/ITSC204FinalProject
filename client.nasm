@@ -38,7 +38,13 @@ section .data
     write_f: db "Requested bytes failed to be written to file: output.txt", 0xA, 0x00
     write_f_len: equ $ - write_f
 
-    print_statement: db "%d", 0xA, 0x00
+    file_msg1: db "-----------BEGINNING OF RANDOM DATA------------", 0xA, 0x00
+    file_msg1_l: equ $ - file_msg1
+
+    file_msg2: db "-----------BEGINNING OF MANIPULATED DATA------------", 0xA, 0x00
+    file_msg2_l: equ $ - file_msg2
+
+    ;print_statement: db "%d", 0xA, 0x00
 
     sockaddr_in: 
         istruc sockaddr_in_type 
@@ -129,19 +135,38 @@ _file:
     mov [output_fd], rax
 
     ; Write to file
-    ;call _printf
-    mov	rax, 0x01            ;system call number (sys_write)
-    mov	rdi, [output_fd]     ;file descriptor
+    mov	rsi, file_msg1          ;message to write 
+    mov	rdx, file_msg1_l          ;number of bytes
+    call _write_to_file
+    cmp rax, 0x00
+    jl _write_fail
+    call _lseek
+
     mov	rsi, rec_buffer          ;message to write 
     mov	rdx, 0x100           ;number of bytes
-    syscall
+    call _write_to_file
     cmp rax, 0x00
     jl _write_fail
     call _write_success
+    call _lseek
 
     ; Close file
     mov rax, 0x3                        ; close syscall
     mov rdi, qword [output_fd]     
+    syscall
+    ret
+
+_write_to_file:
+    mov	rax, 0x01            ;system call number (sys_write)
+    mov	rdi, [output_fd]     ;file descriptor
+    syscall
+    ret
+
+_lseek:
+    mov rax, 0x08           ; sys_lseek
+    mov rdi, [output_fd]    ; File descriptor for output.txt
+    mov rsi, 2              ; seek end of file
+    mov rdx, 0x00           ; Beginning of file
     syscall
     ret
 
