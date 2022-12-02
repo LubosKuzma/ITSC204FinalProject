@@ -63,12 +63,8 @@ section .bss
     output_fd: resb 1
 
 section .text
-    ;default rel
-    ;global main
     global _start
-    ;extern printf
 
-;main:
 _start:
     call _socket
     call _send_rec
@@ -103,9 +99,9 @@ _socket:
 _send_rec:
     ; based on sendto syscall
     mov rax, 0x2C                       ; sendmsg syscall
-    mov rdi, [socket_fd]                       ; int fd
-    mov rsi, send_command                      ; int type - SOCK_STREAM = 1
-    mov rdx, send_command_l                       ; int protocol is 0
+    mov rdi, [socket_fd]                ; int fd
+    mov rsi, send_command               ; int type - SOCK_STREAM = 1
+    mov rdx, send_command_l             ; int protocol is 0
     mov r10, MSG_DONTWAIT
     mov r8, sockaddr_in
     mov r9, sockaddr_in_l
@@ -126,60 +122,58 @@ _send_rec:
 
 _file:
     ; Create new output file
-    mov rax, 0x55        ; creat() syscall
-    mov rdi, file_name   ; File name
-    mov rsi, 0777        ; file mode (read, write and execute)
+    mov rax, 0x55               ; creat() syscall
+    mov rdi, file_name          ; File name
+    mov rsi, 0777               ; file mode (read, write and execute)
     syscall
     cmp rax, 0x00
     jl _file_not_created
     mov [output_fd], rax
 
     ; Write to file
-    mov	rsi, file_msg1          ;message to write 
-    mov	rdx, file_msg1_l          ;number of bytes
-    call _write_to_file
-    cmp rax, 0x00
-    jl _write_fail
-    call _append
+    mov	rsi, file_msg1          ; message to write ("Random data")
+    mov	rdx, file_msg1_l        ; number of bytes
+    call _write_to_file         
+    call _append                ; append new content to end of file
 
-    mov	rsi, rec_buffer          ;message to write 
-    mov	rdx, 0x100           ;number of bytes
+    mov	rsi, rec_buffer         ; message to write (buffer)
+    mov	rdx, 0x100              ; number of bytes
     call _write_to_file
     cmp rax, 0x00
     jl _write_fail
     call _write_success
     call _append
     
-    mov	rsi, file_msg2          ;message to write 
-    mov	rdx, file_msg2_l          ;number of bytes
+    mov	rsi, file_msg2          ; message to write ("Manipulated data")
+    mov	rdx, file_msg2_l        ; number of bytes
     call _write_to_file
     call _append
 
-    call _insertion_sort
-    mov	rsi, rec_buffer          ;message to write 
-    mov	rdx, 0x100           ;number of bytes
+    call _insertion_sort        ; Call function to sort bytes in buffer
+    mov	rsi, rec_buffer         ; message to write (sorted buffer)
+    mov	rdx, 0x100              ; number of bytes
     call _write_to_file
-    call _append
+    ;call _append
 
     ; Close file
-    mov rax, 0x3                        ; close syscall
+    mov rax, 0x3                ; close syscall
     mov rdi, qword [output_fd]     
     syscall
     ret
 
 _write_to_file:
-    mov	rax, 0x01            ;system call number (sys_write)
-    mov	rdi, [output_fd]     ;file descriptor
+    mov	rax, 0x01               ; sys_write
+    mov	rdi, [output_fd]        ; file descriptor
     syscall
     ret
 
 _append:
     mov   rax, 2
     mov   rdi, file_name
-    mov   rsi, 0x441        ; O_CREAT| O_WRONLY | O_APPEND
-    mov   edx, 0q666        ; octal permissions in case O_CREAT has to create it
+    mov   rsi, 0x441            ; O_CREAT| O_WRONLY | O_APPEND
+    mov   edx, 0q666            ; octal permissions in case O_CREAT has to create it
     syscall
-    mov   r8, rax      ; save the file descriptor
+    ;mov   r8, rax              ; save the file descriptor
     ret
 
 _insertion_sort:
@@ -204,7 +198,7 @@ _insertion_sort:
         mov r9, r8                  ; j = i - 1;
         dec r9
 
-        ; Move elements of array[0..i-1], that are greater than key,
+        ; Move elements of array that are greater than key,
         ; to one position ahead of their current position
         ; while(j >= 0 && array[j] > key)
         _while_loop:
@@ -216,32 +210,20 @@ _insertion_sort:
             mov r11, [rsi+r9+1]     ; array[j+1] = array[j]
             mov [rsi+r9], r11
             
-            sub r9, 1               ; j = j-1
+            dec r9                  ; j = j-1
 
         end_while_loop:
             mov [rsi+r9+1], r10     ; array[j+1] = key
 
             inc r8                  ; i++
-            jmp _for_loop
+            jmp _for_loop           ; Loop for next position in array
 
     end_for_loop:
-    mov [rec_buffer], rsi
+    mov [rec_buffer], rsi           ; Move sorted bytes back to original array
     ; Prologue
     mov rsp, rbp
     pop rbp
     ret
-
-
-;_printf:
-;    push rbp                    ; prologue
-;    mov rbp, rsp
-;    mov rdi, print_statement    ; load print_statement
-;    mov rsi, [rec_buffer]       ; 
-;    mov rax, 0                  ; clear rax
-;    call printf wrt ..plt       ; call printf function
-;    mov rsp, rbp                ; epilogue
-;    pop rbp
-;    ret 
 
 _print:
     ; prologue
