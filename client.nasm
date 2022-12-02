@@ -41,7 +41,7 @@ section .data
     file_msg1: db "-----------BEGINNING OF RANDOM DATA------------", 0xA, 0x00
     file_msg1_l: equ $ - file_msg1
 
-    file_msg2: db "-----------BEGINNING OF MANIPULATED DATA------------", 0xA, 0x00
+    file_msg2: db 0xA, "-----------BEGINNING OF MANIPULATED DATA------------", 0xA, 0x00
     file_msg2_l: equ $ - file_msg2
 
     ;print_statement: db "%d", 0xA, 0x00
@@ -155,6 +155,12 @@ _file:
     call _write_to_file
     call _append
 
+    call _insertion_sort
+    mov	rsi, rec_buffer          ;message to write 
+    mov	rdx, 0x100           ;number of bytes
+    call _write_to_file
+    call _append
+
     ; Close file
     mov rax, 0x3                        ; close syscall
     mov rdi, qword [output_fd]     
@@ -175,6 +181,66 @@ _append:
     syscall
     mov   r8, rax      ; save the file descriptor
     ret
+
+_insertion_sort:
+    push rbp            ; prologue
+    mov rbp, rsp
+
+    mov rax, 0x100      ; array length
+    mov rcx, 4          ; Multipy rcx by 4 to put it at the last address of array
+    mul rcx
+    mov rcx, rax
+
+    mov rax, 4          ; rax = i
+    xor rbx, rbx        ; rbx = j (set to 0)
+    mov rsi, rec_buffer ; rsi is the array
+
+        MainLoop:
+            cmp rax, rcx        ; if i >= array length, exit loop    
+            jge EndLoop
+            push rcx            ; saves rcx value
+            mov r8, [rsi+rbx]   ; r8 = array[j]
+            mov r9, [rsi+rbx+4] ; r9 = array[j+1]
+            ;push r8
+            push r9
+            mov rcx, [rsi+rax]  ; rcx = array[i]
+            mov rbx, rax        ; j = i-1
+            sub rbx, 4
+
+            EnterWhile:
+                cmp rbx, 0          ; if j < 0, exit loop
+                jl EndWhile
+
+                ; if array[j] <= key, exit loop
+                cmp [rsi+rbx], rcx
+                jle EndWhile
+
+                ; array[j+1] = array[j]
+                pop r8
+
+                ;j--
+                sub rbx, 4
+
+                ;go back to the top of this loop
+                jmp EnterWhile
+            EndWhile:
+            ;array[j+1] = key
+            mov [rsi+rbx+4], rcx
+
+            ;i++
+            add rcx, 4
+
+            pop rcx
+
+            ;go back to the top of main loop
+            jmp MainLoop
+        
+        EndLoop:
+        mov rsp, rbp
+        pop rbp
+        ret
+
+
 
 ;_printf:
 ;    push rbp                    ; prologue
