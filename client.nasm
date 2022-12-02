@@ -183,63 +183,52 @@ _append:
     ret
 
 _insertion_sort:
-    push rbp            ; prologue
+    ; Epilogue
+    push rbp
     mov rbp, rsp
 
-    mov rax, 0x100      ; array length
-    mov rcx, 4          ; Multipy rcx by 4 to put it at the last address of array
-    mul rcx
-    mov rcx, rax
+    xor r8, r8                      ; r8 = i (intialize)
+    xor r9, r9                      ; r9 = j (intialize)
+    xor r10, r10                    ; r10 = key (initialize)
+    mov rsi, rec_buffer             ; rsi = array[]
+    mov rax, 0x100                  ; array length (n)
 
-    mov rax, 4          ; rax = i
-    xor rbx, rbx        ; rbx = j (set to 0)
-    mov rsi, rec_buffer ; rsi is the array
+    mov r8, 0x01                    ; i = 1
 
-        MainLoop:
-            cmp rax, rcx        ; if i >= array length, exit loop    
-            jge EndLoop
-            push rcx            ; saves rcx value
-            mov r8, [rsi+rbx]   ; r8 = array[j]
-            mov r9, [rsi+rbx+4] ; r9 = array[j+1]
-            ;push r8
-            push r9
-            mov rcx, [rsi+rax]  ; rcx = array[i]
-            mov rbx, rax        ; j = i-1
-            sub rbx, 4
+    ; for (i = 1; i < n; i++)
+    _for_loop:
+        cmp r8, rax                 ; if i >= n, stop the loop
+        jge end_for_loop
 
-            EnterWhile:
-                cmp rbx, 0          ; if j < 0, exit loop
-                jl EndWhile
+        mov r10, [rsi+r8]           ; key = array[i]
+        mov r9, r8                  ; j = i - 1;
+        dec r9
 
-                ; if array[j] <= key, exit loop
-                cmp [rsi+rbx], rcx
-                jle EndWhile
+        ; Move elements of array[0..i-1], that are greater than key,
+        ; to one position ahead of their current position
+        ; while(j >= 0 && array[j] > key)
+        _while_loop:
+            cmp r9, 0x00            ; if j < 0, then stop this loop
+            jl end_while_loop
+            cmp [rsi+r9], r10       ; if array[j] <= key, stop this loop
+            jle end_while_loop
 
-                ; array[j+1] = array[j]
-                pop r8
+            mov r11, [rsi+r9+1]     ; array[j+1] = array[j]
+            mov [rsi+r9], r11
+            
+            sub r9, 1               ; j = j-1
 
-                ;j--
-                sub rbx, 4
+        end_while_loop:
+            mov [rsi+r9+1], r10
 
-                ;go back to the top of this loop
-                jmp EnterWhile
-            EndWhile:
-            ;array[j+1] = key
-            mov [rsi+rbx+4], rcx
+            inc r8
+            jmp _for_loop
 
-            ;i++
-            add rcx, 4
-
-            pop rcx
-
-            ;go back to the top of main loop
-            jmp MainLoop
-        
-        EndLoop:
-        mov rsp, rbp
-        pop rbp
-        ret
-
+    end_for_loop:
+    ; Prologue
+    mov rsp, rbp
+    pop rbp
+    ret
 
 
 ;_printf:
