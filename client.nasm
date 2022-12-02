@@ -255,10 +255,10 @@ section .data
     socket_t_msg:   db "Socket created.", 0xA, 0x0
     socket_t_msg_l: equ $ - socket_t_msg
 
-    connect_f_msg:   db "Connect failed to be created.", 0xA, 0x0
+    connect_f_msg:   db "Socket failed to be connected.", 0xA, 0x0
     connect_f_msg_l: equ $ - connect_f_msg
 
-    connect_t_msg:   db "Connect created.", 0xA, 0x0
+    connect_t_msg:   db "Socket connected.", 0xA, 0x0
     connect_t_msg_l: equ $ - connect_t_msg    
 
 
@@ -272,7 +272,7 @@ section .data
 
             at sockaddr_in_type.sin_family,  dw 0x02            ;AF_INET -> 2 
             at sockaddr_in_type.sin_port,    dw 0xDE27          ;port in hex and big endian order, 10206 -> 0xDE27 
-            at sockaddr_in_type.sin_addr,    dw 0xB886EE8C      ;address 140.238.134.184 -> 0xB886EE8C
+            at sockaddr_in_type.sin_addr,    dd 0xB886EE8C      ;address 140.238.134.184 -> 0xB886EE8C
 
         iend
     sockaddr_in_l:  equ $ - sockaddr_in
