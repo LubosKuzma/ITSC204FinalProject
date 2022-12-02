@@ -219,12 +219,13 @@ _insertion_sort:
             sub r9, 1               ; j = j-1
 
         end_while_loop:
-            mov [rsi+r9+1], r10
+            mov [rsi+r9+1], r10     ; array[j+1] = key
 
-            inc r8
+            inc r8                  ; i++
             jmp _for_loop
 
     end_for_loop:
+    mov [rec_buffer], rsi
     ; Prologue
     mov rsp, rbp
     pop rbp
