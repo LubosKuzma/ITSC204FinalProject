@@ -140,7 +140,7 @@ _file:
     call _write_to_file
     cmp rax, 0x00
     jl _write_fail
-    call _lseek
+    call _append
 
     mov	rsi, rec_buffer          ;message to write 
     mov	rdx, 0x100           ;number of bytes
@@ -148,7 +148,12 @@ _file:
     cmp rax, 0x00
     jl _write_fail
     call _write_success
-    call _lseek
+    call _append
+    
+    mov	rsi, file_msg2          ;message to write 
+    mov	rdx, file_msg2_l          ;number of bytes
+    call _write_to_file
+    call _append
 
     ; Close file
     mov rax, 0x3                        ; close syscall
@@ -162,12 +167,13 @@ _write_to_file:
     syscall
     ret
 
-_lseek:
-    mov rax, 0x08           ; sys_lseek
-    mov rdi, [output_fd]    ; File descriptor for output.txt
-    mov rsi, 2              ; seek end of file
-    mov rdx, 0x00           ; Beginning of file
+_append:
+    mov   rax, 2
+    mov   rdi, file_name
+    mov   rsi, 0x441        ; O_CREAT| O_WRONLY | O_APPEND
+    mov   edx, 0q666        ; octal permissions in case O_CREAT has to create it
     syscall
+    mov   r8, rax      ; save the file descriptor
     ret
 
 ;_printf:
