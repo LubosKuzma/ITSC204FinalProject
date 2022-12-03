@@ -183,47 +183,45 @@ _insertion_sort:
 
     xor r8, r8                      ; r8 = i (intialize)
     xor r9, r9                      ; r9 = j (intialize)
-    xor r10, r10                    ; r10 = key (initialize)
-    mov rsi, rec_buffer             ; rsi = array[]
-    mov rax, 0x100                  ; array length (n)
+    xor rax, rax                    ; rax = key (initialize)
+    mov r11, 0x100                  ; array length (n)
 
     mov r8, 0x01                    ; i = 1
 
     ; for (i = 1; i < n; i++)
     _for_loop:
-        cmp r8, rax                 ; if i >= n, stop the loop
+        cmp r8, r11                         ; if i >= n, stop the loop
         jge end_for_loop
 
-        mov r10, [rsi+r8]           ; key = array[i]
-        mov r9, r8                  ; j = i - 1;
+        lea rcx, [rec_buffer+r8]            ; key = array[i]
+        mov al, byte [rcx]                  ; al = key
+        mov r9, r8                          ; j = i - 1;
         dec r9
 
-        ; Move elements of array that are greater than key,
-        ; to one position ahead of their current position
         ; while(j >= 0 && array[j] > key)
         _while_loop:
-            cmp r9, 0x00            ; if j < 0, then stop this loop
+            cmp r9, 0x00                    ; if j < 0, then stop this loop
             jl end_while_loop
-            cmp [rsi+r9], r10       ; if array[j] <= key, stop this loop
+            lea rcx, [rec_buffer+r9]
+            mov dl, byte [rcx]              ; dl = array[j]
+            cmp dl, al                      ; if array[j] <= key, stop this loop
             jle end_while_loop
+          
+            mov [rec_buffer+r9+1], byte dl  ; array[j+1] = array[j]         
+            dec r9                          ; j = j-1
 
-            mov r11, [rsi+r9+1]     ; array[j+1] = array[j]
-            mov [rsi+r9], r11
-            
-            dec r9                  ; j = j-1
+            jmp _while_loop
 
         end_while_loop:
-            mov [rsi+r9+1], r10     ; array[j+1] = key
-
-            inc r8                  ; i++
-            jmp _for_loop           ; Loop for next position in array
+            mov [rec_buffer+r9+1], byte al  ; array[j+1] = key
+            inc r8                          ; i++
+            jmp _for_loop                   ; Loop for next position in array        ; Loop for next position in array
 
     end_for_loop:
-    mov [rec_buffer], rsi           ; Move sorted bytes back to original array
-    ; Prologue
-    mov rsp, rbp
-    pop rbp
-    ret
+        ; Prologue
+        mov rsp, rbp
+        pop rbp
+        ret
 
 _print:
     ; prologue
