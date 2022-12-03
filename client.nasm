@@ -76,7 +76,7 @@ _client:
         mov rax, 0x00                       ; read syscall
         mov rdi, 0x00                       ; read buffer fd
         mov rsi, msg_buf                    ; buffer pointer where message will be saved
-        mov rdx, 0x03                       ; message buffer size
+        mov rdx, 0x04                       ; message buffer size
         syscall
         
         ret
@@ -86,7 +86,7 @@ _client:
         mov rax, 0x01                       ; write syscall
         mov rdi, qword[socket_fd]           ; socket file desctriptor
         mov rsi, msg_buf                    ; store message buffer pointer into rsi
-        mov rdx, 0x03                       ; store message buffer length into rdx
+        mov rdx, 0x04                       ; store message buffer length into rdx
         syscall
 
         mov rax, 35                         ; sleep syscall
@@ -104,7 +104,7 @@ _client:
         mov rdx, 0x500                      ; move random_array length into rdx
         syscall
         
-        push rax
+        
         ret       
 
 _sort:
@@ -295,7 +295,7 @@ section .bss
     socket_fd:               resq 1             ; socket file descriptor
     read_buffer_fd           resq 1             ; file descriptor for read buffer
     chars_received           resq 1             ; number of characters received from socket
-    msg_buf:                 resb 3             ; message buffer
+    msg_buf:                 resb 4             ; message buffer
     random_array:            resb 0x500         ; reserve 1024 bytes
     count: resb 0x100                           ; Space for count array in _sort
     output: resb 0x100                          ; Space for output array in _sort
