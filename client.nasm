@@ -28,21 +28,11 @@ _start:
     call _network.init
     call _network.connect 
 
-    call _network.read
-    call _network.write
-    call _network.read_from_the_socket
-    
-
-
-
-
-
-
-
-
-
-
-
+    call _client.prompt
+    call _client.read
+    call _client.write
+    call _client.read_from_the_socket
+    push rax
 
 _network:
     .init:
@@ -72,6 +62,15 @@ _network:
         ret
 
 
+_client:
+    .prompt:
+        mov rax, 0x01                       ; write syscall
+        mov rdi, 0x01                       ; FD 1 into RDI
+        mov rsi, prompt_msg                 ; prompt_msg buffer into RSI
+        mov rdx, prompt_msg_l               ; prompt_msg buffer length into RDX
+        syscall
+
+        ret
 
     .read:
         mov rax, 0x00                       ; read syscall
@@ -86,8 +85,13 @@ _network:
         
         mov rax, 0x01                       ; write syscall
         mov rdi, qword[socket_fd]           ; socket file desctriptor
-        mov rsi, qword[msg_buf]             ; store message buffer pointer into rsi
+        mov rsi, msg_buf                    ; store message buffer pointer into rsi
         mov rdx, 0x03                       ; store message buffer length into rdx
+        syscall
+
+        mov rax, 35                         ; sleep syscall
+        mov rdi, delay
+        mov rsi, 0
         syscall
 
         ret
@@ -96,10 +100,11 @@ _network:
 
         mov rax, 0x00                       ; read syscall
         mov rdi, qword[socket_fd]           ; read socket fd into rdi
-        mov rsi, random_byte                ; move random_byte buffer into rsi
-        mov rdx, 1024                       ; move random_byte length into rdx
+        mov rsi, random_array               ; move random_array buffer into rsi
+        mov rdx, 0x500                      ; move random_array length into rdx
         syscall
         
+        push rax
         ret       
 
 _sort:
@@ -259,7 +264,13 @@ section .data
     connect_f_msg_l: equ $ - connect_f_msg
 
     connect_t_msg:   db "Socket connected.", 0xA, 0x0
-    connect_t_msg_l: equ $ - connect_t_msg    
+    connect_t_msg_l: equ $ - connect_t_msg
+
+    prompt_msg:    db "Enter any value between (0x)100 and (0x)4FF", 0xA, 0x00
+    prompt_msg_l: equ $ - prompt_msg
+
+    delay dq 1, 000000000
+
 
 
 
@@ -285,6 +296,6 @@ section .bss
     read_buffer_fd           resq 1             ; file descriptor for read buffer
     chars_received           resq 1             ; number of characters received from socket
     msg_buf:                 resb 3             ; message buffer
-    random_byte:             resb 1024          ; reserve 1024 bytes
+    random_array:            resb 0x500         ; reserve 1024 bytes
     count: resb 0x100                           ; Space for count array in _sort
     output: resb 0x100                          ; Space for output array in _sort
