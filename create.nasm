@@ -1,77 +1,75 @@
-;v1.01
-section .text
-globle _start
+;v1.03
+SECTION .text
+global  _start
+ 
 _start:
-    _file:                              ;file function
-        
-        .create:
-            mov rax, 0x55               ;create call
-            mov rdi, Nfilename          ;file name
-            mov rsi, 511                ;give all premission
-            syscall
-            push rax                    ;save file descriptor in stack
-            cmp rax                     ;if rax = 0, the file create successful            
-            jz _file.create_notice
-            jmp _file.create_failed
+    .Print_start:
+    mov     rsi, 511            ;create file mod
+    mov     rdi, filename       ;filename
+    mov     rax, 0x55           ;creat syscall
+    syscall
+    cmp     rax, 0              ;if rax = 0, the file had exist.
+    jz     .Print_No_file
+    mov     [Handle], rax       ;save our file descriptor 
+    jmp     .Print_IN_file      ;jump to print in file
 
-        .create_failed:
-            mov rax, 0x1
-            mov rdi, 0
-            mov rsi, file_error_S
-            mov rdx, file_error_L
-            jmp _file.create
+    .Print_No_file:
+    mov     rax, file_error
+    call    strlen_cal
+    mov     rdi, 0
+    mov     rdx, rax
+    mov     rsi, file_error     ;print "This file already exist, Please try again" in screen
+    mov     rax, 1
+    jmp     .Print_start
 
-        .create_notice:
-            mov rax, 0x1                ;write call
-            mov rdi, 0                  
-            mov rsi, file_haved_S       ;print(This file has created)
-            mov rdx, file_haved_L
-            syscall
+    .Print_IN_file:
+    mov     rax, Nosort_notice  
+    mov     r8, Nosort_notice
+    call    strlen_cal
+    call    print               ;print "This is beginning of No sort data:" in file
 
-        
-        .nosort_notice: 
-            pop rdi
-            mov rax, 0x1                ;write syscall
-            mov rdi, rdi                ;file descriptor
-            mov rsi, nosort_notice_S    ;print(This is beginning of the no sort data)
-            mov rdx, nosort_notice_L
-            syscall
-            
-        .write.nosort:
-            mov rdx,                    ;our number of bytes to write
-            mov rcx,                    ;our receive byte (No ranked) pointer
-            mov rdi, rdi                 ;our file descriptor
-            mov rax, 0x1                ;write syscall
-            syscall
+    ;mov     rax,               ;add nosort data pointer or register in there
+    ;mov     r8,                ;add nosort data pointer or register in there
+    ;call    strlen_cal
+    ;call    print
 
-        .sort_notice:                   
-            mov rax, 0x1                ;write syscall
-            mov rdi, rdi                  ;file descriptor
-            mov rsi, sort_notice_S      ;print(This is beginning of the sort data)
-            mov rdx, sort_notice_L
-            syscall
+    mov     rax, Sort_notice    
+    mov     r8, Sort_notice
+    call    strlen_cal      
+    call    print               ;print "This is beginning of sort data:" in file
 
-        .write_sort:
-            mov rdx,                    ;our number of bytes to write
-            mov rcx,                    ;our receive byte (ranked) pointer
-            mov rdi, rdi                 ;file descriptor
-            mov rax, 0x1                ;write syscall
-            syscall
-        
-        .close:
-            mov rax, 0x3
-            mov rdi, 1
-            syscall
+    ;mov     rax,               ;add sort data pointer or register in there
+    ;mov     r8,                ;add sort data pointer or register in there
+    ;call    strlen_cal
+    ;call    print
 
-        
+exit:
+    mov     rax, 60
+    mov     rdi, 0
+    syscall
 
-section .data:
-    Nfilename: db "No_rank_file", 0x0
-    file_haved_S: db "This file has created", 0xA, 0x0
-    file_haved_L: equ $ - file_haved_S
-    nosort_notice_S: db "This is beginning of No sort data:", 0xA, 0x0
-    nosort_notice_L: equ $ - nosort_notice_S
-    sort_notice_S: db "This is beginning of No sort data:", 0xA, 0x0
-    sort_notice_L: equ $ - sort_notice_S
-    file_error_S:  db "This file already exist, Please try again", 0xA, 0x0
-    file_error_L: equ $ - file_error_S
+print:
+    mov     rdi, [Handle]
+    mov     rdx, rax
+    mov     rsi, r8
+    mov     rax, 1
+    syscall
+    ret
+strlen_cal:                     
+    push    rbx             
+    mov     rbx, rax       
+    .nextchar:
+    cmp     byte [rax], 0   
+    jz      strlen_cal.finished        
+    inc     rax            
+    jmp     strlen_cal.nextchar        
+    strlen_cal.finished:
+    sub     rax, rbx		
+    pop     rbx             
+    ret                     
+SECTION .data
+filename db 'TeamNASM.txt', 0x0    ; the filename to create
+file_error:  db "This file already exist, Please try again", 0xA, 0x0
+Nosort_notice: db "This is beginning of No sort data:", 0xA, 0x0
+Sort_notice: db "This is beginning of sort data:", 0x0
+Handle dq 10
