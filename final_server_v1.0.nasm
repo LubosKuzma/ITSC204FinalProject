@@ -55,6 +55,8 @@ section .data
 section .bss
     rec_buffer:              resb 0x101
     socket_fd:               resq 1             ; socket file descriptor
+    random_buf: resb 0x8 
+    random_number: resb 0x8 
 
 ;Kanwar file creation .bss
     file_fd: resb 1 ; file descriptor for new file created
@@ -128,6 +130,38 @@ _start:
 
 ; Function(s) for requesting 0x100 - 0x5FF to get randomized characters.
 ;-------------------------------------------------------------------
+
+_get_random:
+    push rbp
+    mov rbp, rsp
+
+    ; Set up registers for the syscall getrandom
+    mov rax, 318 ; getrandom syscall number
+    mov rdi, random_buf ;  buffer to store random bytes in  
+    mov rsi, 8 ; size of the buffer
+    xor rdx, rdx ; flags (0 for default behavior)
+
+    syscall
+
+    ; Load the generated random number into the RAX register
+    mov rax, [random_buf]
+
+    ; Mask the random number to get a value between 0x100 and 0x5FF
+    and rax, 0x5FF
+    or rax, 0x100
+
+
+    ; Return the masked random number in the RAX register
+    mov [random_number], rax 
+
+    mov rsp, rbp
+    pop rbp
+
+
+    ret
+
+
+
 
 ;-------------------------------------------------------------------
 
