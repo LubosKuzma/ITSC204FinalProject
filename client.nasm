@@ -8,6 +8,16 @@
 ; 
 ; *******************************
 
+; Values for malloc
+NULL            equ 0x00
+MAP_SHARED      equ 0x01
+MAP_PRIVATE     equ 0x02
+MAP_FIXED       equ 0x10
+MAP_ANONYMOUS   equ 0x20
+PROT_NONE       equ 0x00
+PROT_READ       equ 0x01
+PROT_WRITE      equ 0x02
+PROT_EXEC       equ 0x04
 
 ;*****************************
 struc sockaddr_in_type
@@ -26,13 +36,23 @@ global _start
 
 _start:
     call _network.init
+
     call _network.connect 
 
     call _client.prompt
+
     call _client.read
+
     call _client.write
+
     call _client.read_from_the_socket
+    
+    sub rax, 0x1
     push rax
+    call _sort
+    add rsp, 0x8
+
+    jmp _exit
 
 _network:
     .init:
@@ -108,35 +128,34 @@ _client:
         ret       
 
 _sort:
-    ; NEEDS  TO BE PASSED THE NUMBER OF CHARACTERS ON THE STACk (minus one for newline) 
-
     push rbp                            ; Prologue
     mov rbp, rsp
 
-    add rsp, 0x8                        ;[rbp - 0x08] = local variable for the max value in the array
 
     ; LOOP 1 
-    ; Find the max value in the array, 0 to the size of the array
+    ; Find the max value in the array, go from 0 to the size of the recieved array
     mov r8, 0x0                         ; Set the counter to zero
-    mov bl, byte [array]                ; Set the first value as the max (bl is the temp max variable to reduce mov's)
+    mov bl, byte [random_array]                ; Set the first value as the max (bl is the temp max variable to reduce mov's)
     .MaxLoop:
-    cmp bl, byte [array + r8]               ; Compare the current arry value to the max
-    jg .MaxLoopSkip                    ; If less than or equal to the max then skip
+    cmp bl, byte [random_array + r8]           ; Compare the current arry value to the max
+    jg .MaxLoopSkip                     ; If less than or equal to the max then skip
 
-    mov bl, byte [array + r8]          ; Else set new max value stored to bl
+    mov bl, byte [random_array + r8]           ; Else set new max value stored to bl
 
     .MaxLoopSkip:
-    cmp r8, [rbp + 0x10]                ; Compare against number of elements in array (passed via stack)
-    jge .MaxLoopEnd                     ; If 
+    cmp r8, [rbp + 0x10]                ; Compare against total number of elements in array (size of array was passed via stack)
+    jge .MaxLoopEnd                     
     inc r8
     jmp .MaxLoop
     .MaxLoopEnd:
-    mov [rbp - 0x8], bl                 ; Save the highest value to local variable (max variable)
-    
+    push rbx                             ; Pass the max value (in bl) to malloc function
 
+
+    ; MEMORY CREATION FOR COUNT ARRAY
     ; Dynamically create an array "count" of the size of the maximum value in the array
-
-    ; **TODO**
+    call _memAllocation
+    mov r15, rax                        ; Save the return value from mmap into r15 for direct use
+    xor rax, rax                        ;r15 will be used to reference the newly created count array that is the size the max value in the original array
 
 
     ; LOOP 2
@@ -146,10 +165,10 @@ _sort:
     mov r9, [rbp + 0x10]                ; Load r9 with the number of characters
     dec r9                              ; Subtract 1 from r9 cause array starts from zero
     .CountLoop:
-    mov bl, byte [array + r8]           ; Get current value from the main array
-    mov al, byte [count + rbx]          ; Use current value to access its literal index in the count array (# of occurences for each val at their respective locations)
+    mov bl, byte [random_array + r8]    ; Get current value from the main array
+    mov al, byte [r15 + rbx]            ; Use current value to access its literal index in the count array (# of occurences for each val at their respective locations)
     inc rax                             ; Increase the count of the number of occurences of the current value by 1
-    mov [count + rbx], al               ; Replace old value with incremented occurences count value
+    mov [r15 + rbx], al                 ; Replace old value with incremented occurences count value
     
     cmp r8, r9                          ; Check to see if the end of the array has been reached
     jge .CountLoopEnd                   ; End if yes, increment and repeat if no
@@ -157,14 +176,15 @@ _sort:
     jmp .CountLoop
     .CountLoopEnd:
 
+
     ; LOOP 3
     ; Perform running count of count array (add every the previous index to the current index)
     mov r8, 0x1                         ; Counter, start at 1 because we will be adding the previous value to the current value
     .RunningCountLoop:                  
-    mov al, byte [count + r8]           ; Get the current increment position in count array
-    mov bl, byte [count + r8 -1]        ; Repeat 
-    add al, bl
-    mov [count + r8], al
+    mov al, byte [r15 + r8]             ; Get the current number of occurences at the given index in count array
+    mov bl, byte [r15 + r8 -1]          ; Get the number of occurences at the previous index
+    add al, bl                          ; Add the values together
+    mov [r15 + r8], al
 
     cmp r8, [rbp - 0x8]                 ; Compare against the maximum value in found in the array from earlier
     jge .RunningCountLoopEnd
@@ -172,16 +192,17 @@ _sort:
     jmp .RunningCountLoop               ; Repeat
     .RunningCountLoopEnd:
 
+
     ; LOOP 4
     ; Go back through the array, go to each values position in the count array and put it in the output array at the sum position held in the count array
-    mov r8, [rbp + 0x10]                 ; start at the end of the array
+    mov r8, [rbp + 0x10]                ; start at the end of the array
     dec r8
     .InsertionLoop:
-    mov al, byte [array + r8]           ; Load the value from the current array position
-    mov bl, byte [count + rax]          ; Use the array value to access its corresponding cummulative value in the count array
+    mov al, byte [random_array + r8]    ; Load the value from the current array position
+    mov bl, byte [r15 + rax]            ; Use the array value to access its corresponding cummulative value in the count array
     mov [output + rbx - 1], al          ; Insert this value into the output array at the index of the cumulative value from above
     dec bl                              ; Decrement the cumulative value
-    mov [count + rax], bl               ; Return decremented cumulative to count array
+    mov [r15 + rax], bl                 ; Return decremented cumulative to count array
 
     cmp r8, 0x0                         ; if counter is zero (at last element) end the loop, else decrement and repeat
     jle .InsertionLoopEnd
@@ -190,7 +211,45 @@ _sort:
     jmp .InsertionLoop
     .InsertionLoopEnd:
 
+    push r15
+    call _memFree
+
+
+    add rsp, 0x10                        ; Remove rbx (max value) from the stack that was passed earlier and r15 (created count array)
     mov rsp, rbp                        ; Epilogue
+    pop rbp
+    ret
+
+_memAllocation:
+    push rbp                            ; Prologue
+    mov rbp, rsp
+
+    mov rax, 0x9            ; Mmap syscall (malloc)
+    mov rdi, NULL       
+    mov rsi, [rbp + 0x10]   ; Load max value that was passed via stack   
+    mov rdx, PROT_EXEC
+    or rdx, PROT_READ
+    or rdx, PROT_WRITE
+    mov r10, MAP_ANONYMOUS
+    or r10, MAP_PRIVATE
+    mov r8, 0x00
+    mov r9, 0x00
+    syscall
+
+    mov rsp, rbp                        ; Epilogue
+    pop rbp
+    ret
+
+_memFree:
+    push rbp                ; Prologue
+    mov rbp, rsp
+
+    mov rax, 0xb             ; Free syscall
+    mov rdi, [rbp + 0x10]    ; Array to de-allocate
+    mov rsi, [rbp + 0x18]    ; Size to de-allocate (max value that was loaded onto stack earlier)
+    syscall
+
+    mov rsp, rbp            ; dealocating the stack
     pop rbp
 
     ret
@@ -288,14 +347,10 @@ section .data
         iend
     sockaddr_in_l:  equ $ - sockaddr_in
 
-
-
-
 section .bss
     socket_fd:               resq 1             ; socket file descriptor
     read_buffer_fd           resq 1             ; file descriptor for read buffer
     chars_received           resq 1             ; number of characters received from socket
     msg_buf:                 resb 4             ; message buffer
     random_array:            resb 0x500         ; reserve 1024 bytes
-    count: resb 0x100                           ; Space for count array in _sort
-    output: resb 0x100                          ; Space for output array in _sort
+    output: resb 0x500                          ; Space for output array in _sort
