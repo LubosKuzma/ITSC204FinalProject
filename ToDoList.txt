@@ -1,0 +1,29 @@
+NEXT STEPS
+
+-Use Recieve From Syscall to get data from server.
+    - Copy the used recieve from syscall that the server uses
+    - It points to the data's buffer
+        
+     .read:
+        mov rax, 0x00                       ; read syscall
+        mov rdi, qword [read_buffer_fd]     ; read buffer fd
+        mov rsi, msg_buf                    ; buffer pointer where message will be saved
+        mov rdx, 1024                       ; message buffer size
+        syscall
+        
+        mov qword [chars_received], rax     ; save number of received chars to global  
+        
+-Save Data to Heap using a pointer
+    - Change the data's buffer pointer to the heap using pointer
+    - https://www.tutorialspoint.com/assembly_programming/assembly_memory_management.htm (possibly useful)
+      
+      *Alternatively I think we could move it into a predetermined memory address of a large enough size
+      *When we write to the file I think the stack will cause issues.
+      
+-Save the data into a file and do the sorting
+    -Move the data from the heap to a file
+    -https://www.youtube.com/watch?v=vXsUIX_Ozgc
+    -https://pastebin.com/wCNZs3RN
+    
+-Create an algo to sort the info in the file?
+    - ...?
