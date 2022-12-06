@@ -39,14 +39,8 @@ _start:
 
     call _network.connect 
 
-    call _client.prompt
+    call _client
 
-    call _client.read
-
-    call _client.write
-
-    call _client.read_from_the_socket
-    
     sub rax, 0x1
     push rax
     call _sort
@@ -84,48 +78,46 @@ _network:
 
 _client:
     .prompt:
-        mov rax, 0x01                       ; write syscall
-        mov rdi, 0x01                       ; FD 1 into RDI
-        mov rsi, prompt_msg                 ; prompt_msg buffer into RSI
-        mov rdx, prompt_msg_l               ; prompt_msg buffer length into RDX
-        syscall
 
-        ret
+        push prompt_msg_l                   ; C Calling Convention to prompt user
+        push prompt_msg                     ; to input their desired number of bytes
+        call _print
+
+
+        ; mov rax, 0x01                       ; write syscall
+        ; mov rdi, 0x01                       ; FD 1 into RDI
+        ; mov rsi, prompt_msg                 ; prompt_msg buffer into RSI
+        ; mov rdx, prompt_msg_l               ; prompt_msg buffer length into RDX
+        ; syscall
 
     .read:
         mov rax, 0x00                       ; read syscall
-        mov rdi, 0x00                       ; read buffer fd
-        mov rsi, msg_buf                    ; buffer pointer where message will be saved
-        mov rdx, 0x04                       ; message buffer size
+        mov rdi, 0x00                       ; to read the user input into
+        mov rsi, msg_buf                    ; a dedicated buffer
+        mov rdx, 0x04                       
         syscall
-        
-        ret
         
     .write:
         
         mov rax, 0x01                       ; write syscall
-        mov rdi, qword[socket_fd]           ; socket file desctriptor
-        mov rsi, msg_buf                    ; store message buffer pointer into rsi
-        mov rdx, 0x04                       ; store message buffer length into rdx
+        mov rdi, qword[socket_fd]           ; to write the user input buffer
+        mov rsi, msg_buf                    ; into the socket created earlier
+        mov rdx, 0x04                       
         syscall
 
-        mov rax, 35                         ; sleep syscall
-        mov rdi, delay
-        mov rsi, 0
-        syscall
-
-        ret
+        mov rax, 35                         ; sleep syscall serves to delay program execution
+        mov rdi, delay                      ; by little to allow the sending of bytes
+        mov rsi, 0                          ; to be completed before the next read
+        syscall                             ; reaches the end of the file
 
     .read_from_the_socket:
 
         mov rax, 0x00                       ; read syscall
-        mov rdi, qword[socket_fd]           ; read socket fd into rdi
-        mov rsi, random_array               ; move random_array buffer into rsi
-        mov rdx, 0x500                      ; move random_array length into rdx
+        mov rdi, qword[socket_fd]           ; to retrieve the user input value
+        mov rsi, random_array               ; from socket, to submit to the sorting algorithm
+        mov rdx, 0x500                      
         syscall
-        
-        
-        ret       
+              
 
 _sort:
     push rbp                            ; Prologue
