@@ -44,7 +44,11 @@ _start:
     sub rax, 0x1
     push rax
     call _sort
-    add rsp, 0x8
+    
+    call _file_output
+
+    add rsp, 0x8                            ; Clearing pushed rax value from earlier
+
 
     jmp _exit
 
@@ -83,13 +87,6 @@ _client:
         push prompt_msg                     ; to input their desired number of bytes
         call _print
 
-
-        ; mov rax, 0x01                       ; write syscall
-        ; mov rdi, 0x01                       ; FD 1 into RDI
-        ; mov rsi, prompt_msg                 ; prompt_msg buffer into RSI
-        ; mov rdx, prompt_msg_l               ; prompt_msg buffer length into RDX
-        ; syscall
-
     .read:
         mov rax, 0x00                       ; read syscall
         mov rdi, 0x00                       ; to read the user input into
@@ -99,25 +96,27 @@ _client:
         
     .write:
         
-        mov rax, 0x01                       ; write syscall
+        mov rax, 0x01                       ; write syscall to send requested bytes to server
         mov rdi, qword[socket_fd]           ; to write the user input buffer
         mov rsi, msg_buf                    ; into the socket created earlier
         mov rdx, 0x04                       
         syscall
 
         mov rax, 35                         ; sleep syscall serves to delay program execution
-        mov rdi, delay                      ; by little to allow the sending of bytes
+        mov rdi, delay                      ; to allow the sending of bytes
         mov rsi, 0                          ; to be completed before the next read
         syscall                             ; reaches the end of the file
 
     .read_from_the_socket:
 
-        mov rax, 0x00                       ; read syscall
-        mov rdi, qword[socket_fd]           ; to retrieve the user input value
-        mov rsi, random_array               ; from socket, to submit to the sorting algorithm
+        mov rax, 0x00                       ; read syscall to read random bytes from server 
+        mov rdi, qword[socket_fd]           ; retrieve the returned output from the server at the socket
+        mov rsi, random_array               ; Read result into 
         mov rdx, 0x500                      
         syscall
               
+        ret
+
 
 _sort:
     push rbp                            ; Prologue
@@ -208,7 +207,7 @@ _sort:
 
 
     add rsp, 0x10                        ; Remove rbx (max value) from the stack that was passed earlier and r15 (created count array)
-    mov rsp, rbp                        ; Epilogue
+    mov rsp, rbp                         ; Epilogue
     pop rbp
     ret
 
@@ -246,71 +245,18 @@ _memFree:
 
     ret
 
-_print:
-    ; prologue
-    push rbp
-    mov rbp, rsp
-    push rdi
-    push rsi
-
-    ; [rbp + 0x10] -> buffer pointer
-    ; [rbp + 0x18] -> buffer length
-    
-    mov rax, 0x1
-    mov rdi, 0x1
-    mov rsi, [rbp + 0x10]
-    mov rdx, [rbp + 0x18]
-    syscall
-
-    ; epilogue
-    pop rsi
-    pop rdi
-    pop rbp
-    ret 0x10  
-
-
-_socket_failed:
-    ; print socket failed
-    push socket_f_msg_l
-    push socket_f_msg
-    call _print
-    jmp _exit
-
-_socket_created:
-    ; print socket created
-    push socket_t_msg_l
-    push socket_t_msg
-    call _print
-    ret    
-
-_connect_failed:
-    ; print connect failed
-    push connect_f_msg_l
-    push connect_f_msg
-    call _print
-    jmp _exit
-
-_connect_created:
-    ; print connect created
-    push connect_t_msg_l
-    push connect_t_msg
-    call _print
-    ret      
-
-_Print_start:
-    _Print_start:
+_file_output:
     push rbp                            ;Prologue
     mov rbp, rsp
     
     .Creat_file:
+    mov     rax, 0x55                   ;creat syscall
     mov     rsi, 511                    ;create file mod
     mov     rdi, filename               ;filename
-    mov     rax, 0x55                   ;creat syscall
     syscall
     cmp     rax, 0                      ;if rax = 0, the file had exist.
-    jz      .Open_file
-    cmp     rax, 0                      ;if rax <0, the file create error
-    jl      .Creat_file_error
+    jz      .Open_file       
+    jl      .Creat_file_error           ;if rax <0, the file create error
     mov     [Handle], rax               ;save our file descriptor 
     jmp     .Print_IN_file              ;jump to print in file
 
@@ -350,17 +296,71 @@ _Print_start:
     
     mov     rsp, rbp                    ; dealocating the stack
     pop     rbp
-    ;jmp _exit                          ;if we need to jump to exit function
+    ret
 
     print:
+    mov     rax, 0x1
     mov     rdi, [Handle]
-    mov     rdx, rdx
-    mov     rsi, rsi
-    mov     rax, 1
     syscall
     ret
 
+_print:
+    ; prologue
+    push rbp
+    mov rbp, rsp
+    push rdi
+    push rsi
+
+    ; [rbp + 0x10] -> buffer pointer
+    ; [rbp + 0x18] -> buffer length
+    
+    mov rax, 0x1
+    mov rdi, 0x1
+    mov rsi, [rbp + 0x10]
+    mov rdx, [rbp + 0x18]
+    syscall
+
+    ; epilogue
+    pop rsi
+    pop rdi
+    pop rbp
+    ret 0x10  
+
+
+
+_socket_failed:
+    ; print socket failed
+    push socket_f_msg_l
+    push socket_f_msg
+    call _print
+    jmp _exit
+
+_socket_created:
+    ; print socket created
+    push socket_t_msg_l
+    push socket_t_msg
+    call _print
+    ret    
+
+_connect_failed:
+    ; print connect failed
+    push connect_f_msg_l
+    push connect_f_msg
+    call _print
+    jmp _exit
+
+_connect_created:
+    ; print connect created
+    push connect_t_msg_l
+    push connect_t_msg
+    call _print
+    ret
+
+
 _exit:
+
+    
+
     mov rax, 60
     mov rdi, 0
     syscall
@@ -385,7 +385,7 @@ section .data
 
     delay dq 1, 000000000
 
-    filename: db 'TeamNASM.txt', 0x0    ; the filename to create
+    filename: db 'ClientOutput.txt', 0x0    ; the filename to create
 
     Creat_file_error:  db "This file create error, Please try again", 0xA, 0x0
     Creat_file_error_L: equ $ - Creat_file_error
@@ -393,15 +393,8 @@ section .data
     NoSort_notice: db "This is beginning of No sort data:", 0xA, 0x0
     NoSort_notice_L: equ $ - NoSort_notice
 
-    Sort_notice: db "This is beginning of sort data:", 0x0
+    Sort_notice: db 0xa, 0xa, "This is beginning of sort data:", 0x0
     Sort_notice_L equ $ - Sort_notice
-
-    Handle dq 10
-
-
-
-
-
 
     sockaddr_in: 
         istruc sockaddr_in_type 
@@ -419,4 +412,5 @@ section .bss
     chars_received           resq 1             ; number of characters received from socket
     msg_buf:                 resb 4             ; message buffer
     random_array:            resb 0x500         ; reserve 1024 bytes
-    output: resb 0x500                          ; Space for output array in _sort
+    output:                  resb 0x500         ; Space for output array in _sort
+    Handle:                  resq 10
