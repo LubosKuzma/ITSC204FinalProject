@@ -4,3 +4,4 @@ authentication.ks
 node_modules
 notes/
 **/*-todo.md
+**/*output.txt
