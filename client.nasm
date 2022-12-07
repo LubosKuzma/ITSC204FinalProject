@@ -35,9 +35,7 @@ section .text
 global _start
 
 _start:
-    call _network.init
-
-    call _network.connect 
+    call _network
 
     call _client
 
@@ -54,30 +52,50 @@ _start:
 
 _network:
     .init:
-        ; socket, based on IF_INET to get tcp
         mov rax, 0x29                       ; socket syscall
-        mov rdi, 0x02                       ; int domain - AF_INET = 2
-        mov rsi, 0x01                       ; int type - SOCK_STREAM = 1
+        mov rdi, 0x02                       ; int domain - AF_INET = 2 used for IPv4 Internet protocols
+        mov rsi, 0x01                       ; int type - SOCK_STREAM = 1 used for reliable,two-way and connection-based byte streams
         mov rdx, 0x00                       ; int protocol is 0
         syscall   
 
         cmp rax, 0x00
-        jl _socket_failed                   ; jump if negative
+        jl _socket_failed                   ; jump if socket creation fails 
         mov [socket_fd], rax                ; save the socket fd 
         call _socket_created
-        ret
-
+        
     .connect:
         mov rax, 0x2A                       ; connect syscall
         mov rdi, qword[socket_fd]           ; (sfd) socket file descriptor
-        mov rsi, sockaddr_in                ; sockaddr struct pointer           
+        mov rsi, sockaddr_in                ; sockaddr struct points to the server IP address and port     
         mov rdx, sockaddr_in_l              ; address length 
         syscall 
 
         cmp rax, 0x00
-        jl _connect_failed                  ; jump if negative
+        jl _connect_failed                  ; jump if connection fails 
         call _connect_created
         ret
+
+    .shutdown_socket:
+        mov rax, 0x30                       ; shutdown syscall , it stops communication
+        mov rdi, qword [socket_fd]          ; (sfd) socket file descriptor
+        mov rsi, 0x2                        ; shuwdown RW, Disables further send and receive operations
+        syscall 
+
+        cmp rax, 0x0
+        jne _network.shutdown_socket        ; retry shutdown_socket 
+        call _shutdown_msg
+
+    .close_socket:
+        mov rax, 0x03                       ; close syscall , it destroys the file descriptor 
+        mov rdi, qword [socket_fd]          ; (sfd) socket file descriptor
+        syscall
+
+        cmp rax, 0x0
+        jne _network.close_socket           ; retry close_socket
+        call _close_msg
+        ret
+
+
 
 
 _client:
@@ -85,7 +103,7 @@ _client:
 
         push prompt_msg_l                   ; C Calling Convention to prompt user
         push prompt_msg                     ; to input their desired number of bytes
-        call _print
+        call _print_to_terminal
 
     .read:
         mov rax, 0x00                       ; read syscall
@@ -304,20 +322,17 @@ _file_output:
     syscall
     ret
 
-_print:
+_print_to_terminal:
     ; prologue
     push rbp
     mov rbp, rsp
     push rdi
     push rsi
-
-    ; [rbp + 0x10] -> buffer pointer
-    ; [rbp + 0x18] -> buffer length
-    
-    mov rax, 0x1
+ 
+    mov rax, 0x1                        ; write syscall
     mov rdi, 0x1
-    mov rsi, [rbp + 0x10]
-    mov rdx, [rbp + 0x18]
+    mov rsi, [rbp + 0x10]               ; [rbp + 0x10] -> buffer pointer
+    mov rdx, [rbp + 0x18]               ; [rbp + 0x18] -> buffer length
     syscall
 
     ; epilogue
@@ -332,36 +347,50 @@ _socket_failed:
     ; print socket failed
     push socket_f_msg_l
     push socket_f_msg
-    call _print
+    call _print_to_terminal
     jmp _exit
 
 _socket_created:
     ; print socket created
     push socket_t_msg_l
     push socket_t_msg
-    call _print
+    call _print_to_terminal
     ret    
 
 _connect_failed:
     ; print connect failed
     push connect_f_msg_l
     push connect_f_msg
-    call _print
+    call _print_to_terminal
     jmp _exit
 
 _connect_created:
     ; print connect created
     push connect_t_msg_l
     push connect_t_msg
-    call _print
+    call _print_to_terminal
     ret
+
+_shutdown_msg:
+    ; print socket shutdown
+    push shutdown_t_msg_l
+    push shutdown_t_msg
+    call _print_to_terminal
+    ret
+
+_close_msg:
+    ; print socket closed
+    push close_t_msg_l
+    push close_t_msg
+    call _print_to_terminal
+    ret        
 
 
 _exit:
-
     
+    call _network.shutdown_socket       
 
-    mov rax, 60
+    mov rax, 60                         ;exit syscall
     mov rdi, 0
     syscall
 
@@ -380,6 +409,12 @@ section .data
     connect_t_msg:   db "Socket connected.", 0xA, 0x0
     connect_t_msg_l: equ $ - connect_t_msg
 
+    shutdown_t_msg:   db "Socket shutdown.", 0xA, 0x0
+    shutdown_t_msg_l: equ $ - shutdown_t_msg
+
+    close_t_msg:   db "Socket closed.", 0xA, 0x0
+    close_t_msg_l: equ $ - close_t_msg
+
     prompt_msg:    db "Enter any value between (0x)100 and (0x)4FF", 0xA, 0x00
     prompt_msg_l: equ $ - prompt_msg
 
@@ -394,7 +429,7 @@ section .data
     NoSort_notice_L: equ $ - NoSort_notice
 
     Sort_notice: db 0xa, 0xa, "This is beginning of sort data:", 0x0
-    Sort_notice_L equ $ - Sort_notice
+    Sort_notice_L: equ $ - Sort_notice
 
     sockaddr_in: 
         istruc sockaddr_in_type 
@@ -408,9 +443,7 @@ section .data
 
 section .bss
     socket_fd:               resq 1             ; socket file descriptor
-    read_buffer_fd           resq 1             ; file descriptor for read buffer
-    chars_received           resq 1             ; number of characters received from socket
     msg_buf:                 resb 4             ; message buffer
-    random_array:            resb 0x500         ; reserve 1024 bytes
+    random_array:            resb 0x500         ; reserve 500 bytes
     output:                  resb 0x500         ; Space for output array in _sort
     Handle:                  resq 10
