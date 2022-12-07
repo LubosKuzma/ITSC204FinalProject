@@ -298,6 +298,7 @@ _connect_created:
     ret      
 
 _Print_start:
+    _Print_start:
     push rbp                            ;Prologue
     mov rbp, rsp
     
@@ -313,7 +314,7 @@ _Print_start:
     mov     [Handle], rax               ;save our file descriptor 
     jmp     .Print_IN_file              ;jump to print in file
 
-    .Creat_file_error                   ;check the create is error or not 
+    .Creat_file_error:                   ;check the create is error or not 
     mov     rax, 0x1    
     mov     rdi, 1
     mov     rsi, Creat_file_error
@@ -328,11 +329,11 @@ _Print_start:
     mov     rdi, 0x2                    
     syscall
     mov     [Handle], rax               ;save our file descriptor 
-    jmp     .Print_start
+    jmp     .Print_IN_file
 
     .Print_IN_file:
-    mov     rdx, Nosort_notice_L  
-    mov     rsi, Nosort_notice
+    mov     rdx, NoSort_notice_L  
+    mov     rsi, NoSort_notice
     call    print                       ;print "This is beginning of No sort data:" in file
 
     mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
@@ -389,8 +390,8 @@ section .data
     Creat_file_error:  db "This file create error, Please try again", 0xA, 0x0
     Creat_file_error_L: equ $ - Creat_file_error
 
-    Sort_notice: db "This is beginning of No sort data:", 0xA, 0x0
-    Nosort_notice_L: equ $ - Sort_notice
+    NoSort_notice: db "This is beginning of No sort data:", 0xA, 0x0
+    NoSort_notice_L: equ $ - NoSort_notice
 
     Sort_notice: db "This is beginning of sort data:", 0x0
     Sort_notice_L equ $ - Sort_notice
