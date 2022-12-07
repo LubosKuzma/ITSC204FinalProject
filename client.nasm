@@ -298,66 +298,66 @@ _connect_created:
     ret      
 
 _Print_start:
-    mov     rsi, 511            ;create file mod
-    mov     rdi, filename       ;filename
-    mov     rax, 0x55           ;creat syscall
+    push rbp                            ;Prologue
+    mov rbp, rsp
+    
+    .Creat_file:
+    mov     rsi, 511                    ;create file mod
+    mov     rdi, filename               ;filename
+    mov     rax, 0x55                   ;creat syscall
     syscall
-    cmp     rax, 0              ;if rax = 0, the file had exist.
-    jz     .Print_No_file
-    mov     [Handle], rax       ;save our file descriptor 
-    jmp     .Print_IN_file      ;jump to print in file
+    cmp     rax, 0                      ;if rax = 0, the file had exist.
+    jz      .Open_file
+    cmp     rax, 0                      ;if rax <0, the file create error
+    jl      .Creat_file_error
+    mov     [Handle], rax               ;save our file descriptor 
+    jmp     .Print_IN_file              ;jump to print in file
 
-    .Print_No_file:
-    mov     rax, file_error
-    call    strlen_cal
-    mov     rdi, 0
-    mov     rdx, rax
-    mov     rsi, file_error     ;print "This file already exist, Please try again" in screen
-    mov     rax, 1
+    .Creat_file_error                   ;check the create is error or not 
+    mov     rax, 0x1    
+    mov     rdi, 1
+    mov     rsi, Creat_file_error
+    mov     rdx, Creat_file_error_L     ;print "This file create error, Please try again"
+    syscall
+    jmp     _exit                       
+
+    .Open_file:
+    mov     rax, 0x2                    ;open syscall
+    mov     rdi, filename               ;open the file if the file have existed
+    mov     rsi, 0x2
+    mov     rdi, 0x2                    
+    syscall
+    mov     [Handle], rax               ;save our file descriptor 
     jmp     .Print_start
 
     .Print_IN_file:
-    mov     rax, Nosort_notice  
-    mov     r8, Nosort_notice
-    call    strlen_cal
-    call    print               ;print "This is beginning of No sort data:" in file
+    mov     rdx, Nosort_notice_L  
+    mov     rsi, Nosort_notice
+    call    print                       ;print "This is beginning of No sort data:" in file
 
-    ;mov     rax, [random_array]              ;add nosort data pointer or register in there
-    ;mov     r8,                ;add nosort data pointer or register in there
-    ;call    strlen_cal
-    ;call    print
+    mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
+    mov     rsi, random_array           ;Our sort array is saved in random_array
+    call    print
 
-    mov     rax, Sort_notice    
-    mov     r8, Sort_notice
-    call    strlen_cal      
-    call    print               ;print "This is beginning of sort data:" in file
+    mov     rdx, Sort_notice_L          
+    mov     rsi, Sort_notice            
+    call    print                       ;print "This is beginning of sort data:" in file
 
-    ;mov     rax, [output]              ;add sort data pointer or register in there
-    ;mov     r8,                ;add sort data pointer or register in there
-    ;call    strlen_cal
-    ;call    print
-    jmp _exit
+    mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
+    mov     rsi, output                 ;Our sort array is saved in output
+    call    print
+    
+    mov     rsp, rbp                    ; dealocating the stack
+    pop     rbp
+    ;jmp _exit                          ;if we need to jump to exit function
 
     print:
     mov     rdi, [Handle]
-    mov     rdx, rax
-    mov     rsi, r8
+    mov     rdx, rdx
+    mov     rsi, rsi
     mov     rax, 1
     syscall
     ret
-
-    .strlen_cal:                 ; Prblom need to solve               
-    push    rbx             
-    mov     rbx, rax       
-    .nextchar:
-    cmp     byte [rax], 0   
-    jz      .strlen_cal.finished        
-    inc     rax            
-    jmp     .strlen_cal.nextchar        
-    .strlen_cal.finished:
-    sub     rax, rbx		
-    pop     rbx             
-    ret             
 
 _exit:
     mov rax, 60
@@ -385,9 +385,16 @@ section .data
     delay dq 1, 000000000
 
     filename: db 'TeamNASM.txt', 0x0    ; the filename to create
-    file_error:  db "This file already exist, Please try again", 0xA, 0x0
-    Nosort_notice: db "This is beginning of No sort data:", 0xA, 0x0
+
+    Creat_file_error:  db "This file create error, Please try again", 0xA, 0x0
+    Creat_file_error_L: equ $ - Creat_file_error
+
+    Sort_notice: db "This is beginning of No sort data:", 0xA, 0x0
+    Nosort_notice_L: equ $ - Sort_notice
+
     Sort_notice: db "This is beginning of sort data:", 0x0
+    Sort_notice_L equ $ - Sort_notice
+
     Handle dq 10
 
 
