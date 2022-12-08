@@ -298,28 +298,33 @@ _file_output:
     .Print_IN_file:
     mov     rdx, NoSort_notice_L  
     mov     rsi, NoSort_notice
-    call    print                       ;print "This is beginning of No sort data:" in file
+    call    print_to_file               ;print "This is beginning of No sort data:" in file
 
     mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
     mov     rsi, random_array           ;Our sort array is saved in random_array
-    call    print
+    call    print_to_file
 
     mov     rdx, Sort_notice_L          
     mov     rsi, Sort_notice            
-    call    print                       ;print "This is beginning of sort data:" in file
+    call    print_to_file               ;print "This is beginning of sort data:" in file
 
     mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
     mov     rsi, output                 ;Our sort array is saved in output
-    call    print
+    call    print_to_file
     
     mov     rsp, rbp                    ; dealocating the stack
     pop     rbp
     ret
 
-    print:
+    print_to_file:
     mov     rax, 0x1
     mov     rdi, [Handle]
     syscall
+    ret
+
+close_file:
+    mov rax, 0x3                        ;close file syscall
+    mov rdi, [Handle]                   ;clean the file descriptor
     ret
 
 _print_to_terminal:
@@ -387,7 +392,7 @@ _close_msg:
 
 
 _exit:
-    
+    call close_file
     call _network.shutdown_socket       
 
     mov rax, 60                         ;exit syscall
