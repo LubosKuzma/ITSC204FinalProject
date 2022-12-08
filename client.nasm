@@ -144,12 +144,12 @@ _sort:
     ; LOOP 1 
     ; Find the max value in the array, go from 0 to the size of the recieved array
     mov r8, 0x0                         ; Set the counter to zero
-    mov bl, byte [random_array]                ; Set the first value as the max (bl is the temp max variable to reduce mov's)
+    mov bl, byte [random_array]         ; Set the first value as the max (bl is the temp max variable to reduce mov's)
     .MaxLoop:
-    cmp bl, byte [random_array + r8]           ; Compare the current arry value to the max
+    cmp bl, byte [random_array + r8]    ; Compare the current arry value to the max
     jg .MaxLoopSkip                     ; If less than or equal to the max then skip
 
-    mov bl, byte [random_array + r8]           ; Else set new max value stored to bl
+    mov bl, byte [random_array + r8]    ; Else set new max value stored to bl
 
     .MaxLoopSkip:
     cmp r8, [rbp + 0x10]                ; Compare against total number of elements in array (size of array was passed via stack)
@@ -235,7 +235,7 @@ _memAllocation:
 
     mov rax, 0x9            ; Mmap syscall (malloc)
     mov rdi, NULL       
-    mov rsi, [rbp + 0x10]   ; Load max value that was passed via stack   
+    mov rsi, [rbp + 0x10]   ; Size of array to be created  
     mov rdx, PROT_EXEC
     or rdx, PROT_READ
     or rdx, PROT_WRITE
@@ -267,14 +267,15 @@ _file_output:
     push rbp                            ;Prologue
     mov rbp, rsp
     
-    .Creat_file:
-    mov     rax, 0x55                   ;creat syscall
-    mov     rsi, 511                    ;create file mod
-    mov     rdi, filename               ;filename
+    .Open_file:
+    mov     rax, 0x2                    ;open syscall
+    mov     rdi, filename               ;open the file if the file have existed
+    mov     rsi, 0x442                  ;append, creat and read/write permisions (creat will create the file if it does not exist)
+    mov     rdx, 0q666                  ;permisions for creat to work if needed
     syscall
-    cmp     rax, 0                      ;if rax = 0, the file had exist.
-    jz      .Open_file       
-    jl      .Creat_file_error           ;if rax <0, the file create error
+
+    cmp     rax, -1                      ;if rax = -1, the file had an error.     
+    jle      .Creat_file_error           ;jump to error message
     mov     [Handle], rax               ;save our file descriptor 
     jmp     .Print_IN_file              ;jump to print in file
 
@@ -285,15 +286,6 @@ _file_output:
     mov     rdx, Creat_file_error_L     ;print "This file create error, Please try again"
     syscall
     jmp     _exit                       
-
-    .Open_file:
-    mov     rax, 0x2                    ;open syscall
-    mov     rdi, filename               ;open the file if the file have existed
-    mov     rsi, 0x2
-    mov     rdi, 0x2                    
-    syscall
-    mov     [Handle], rax               ;save our file descriptor 
-    jmp     .Print_IN_file
 
     .Print_IN_file:
     mov     rdx, NoSort_notice_L  
@@ -316,34 +308,49 @@ _file_output:
     pop     rbp
     ret
 
+
     print_to_file:
-    mov     rax, 0x1
+    push rbp                            ;Prologue
+    mov rbp, rsp
+
+    mov     rax, 0x1                
     mov     rdi, [Handle]
     syscall
+
+    mov     rsp, rbp                    ; dealocating the stack
+    pop     rbp
     ret
 
-close_file:
+    close_file:
+    push rbp
+    mov rbp, rsp
+
     mov rax, 0x3                        ;close file syscall
     mov rdi, [Handle]                   ;clean the file descriptor
+
+    mov rsp, rbp                    ; dealocating the stack
+    pop rbp
     ret
 
 _print_to_terminal:
-    ; prologue
-    push rbp
+    
+    push rbp                        ; prologue
     mov rbp, rsp
     push rdi
     push rsi
  
-    mov rax, 0x1                        ; write syscall
+    mov rax, 0x1                     ; write syscall
     mov rdi, 0x1
-    mov rsi, [rbp + 0x10]               ; [rbp + 0x10] -> buffer pointer
-    mov rdx, [rbp + 0x18]               ; [rbp + 0x18] -> buffer length
+    mov rsi, [rbp + 0x10]            ; [rbp + 0x10] -> buffer pointer
+    mov rdx, [rbp + 0x18]            ; [rbp + 0x18] -> buffer length
     syscall
 
     ; epilogue
     pop rsi
     pop rdi
+    mov rsp, rbp                     ; dealocating the stack
     pop rbp
+
     ret 0x10  
 
 
@@ -392,7 +399,7 @@ _close_msg:
 
 
 _exit:
-    call close_file
+    call _file_output.close_file
     call _network.shutdown_socket       
 
     mov rax, 60                         ;exit syscall
@@ -430,10 +437,10 @@ section .data
     Creat_file_error:  db "This file create error, Please try again", 0xA, 0x0
     Creat_file_error_L: equ $ - Creat_file_error
 
-    NoSort_notice: db "This is beginning of No sort data:", 0xA, 0x0
+    NoSort_notice: db 0xa, 0xa, "This is beginning of No sort data:", 0xa, 0x0
     NoSort_notice_L: equ $ - NoSort_notice
 
-    Sort_notice: db 0xa, 0xa, "This is beginning of sort data:", 0x0
+    Sort_notice: db 0xa, 0xa, "This is beginning of sort data:", 0xA, 0x0
     Sort_notice_L: equ $ - Sort_notice
 
     sockaddr_in: 
