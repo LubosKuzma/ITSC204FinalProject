@@ -11,6 +11,8 @@
 ;The task – you will sort the received data from lowest to highest using gnome sort
 ;------------------------------------------------------------------------------------------
 ;Portions of the code have been taken from test_server_lh_8080.nasm created by Lubos Kuzma.
+
+; UPDATES:
 ;------------------------------------------------------------------------------------------
 ;2022-11-30: - this is unfinished
 ;2022-12-08: - sucesffully connected to server and requested 0x100 and printed it
