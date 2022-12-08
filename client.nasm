@@ -316,7 +316,7 @@ _file_output:
     mov     rsi, output                 ;Our sort array is saved in output
     call    print_to_file
 
-    call    confirmation_msg            ;print confirmation message
+    call    _confirmation_msg            ;print confirmation message
     
     mov     rsp, rbp                    ; dealocating the stack
     pop     rbp
