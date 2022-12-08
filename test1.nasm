@@ -1,3 +1,22 @@
+;------------------------------------------------------------------------------------------
+;ITSC204 - Final Project Gnome Sort
+;Team MOV: Vincent, Jinbin, and Kanwar
+;SAIT
+;Client server:
+;Your server IP - 140.238.134.184
+;Your port – 10205
+;
+;Notes:
+;To test, type in “nc <ip> <port>” in your VM
+;The task – you will sort the received data from lowest to highest using gnome sort
+;------------------------------------------------------------------------------------------
+;Portions of the code have been taken from test_server_lh_8080.nasm created by Lubos Kuzma.
+;------------------------------------------------------------------------------------------
+;2022-11-30: - this is unfinished
+;2022-12-08: - sucesffully connected to server and requested 0x100 and printed it
+;            - gnome sort still a work in progress
+;            - figure out how to take data from rec_buffer and use kanwars code to create a file and append.
+
 ;*****************************
 struc sockaddr_in_type
 ; defined in man ip(7) because it's dependent on the type of address
