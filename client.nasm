@@ -51,6 +51,9 @@ _start:
     jmp _exit
 
 _network:
+        push rbp                            ; Prologue
+        mov rbp, rsp
+
     .init:
         mov rax, 0x29                       ; socket syscall
         mov rdi, 0x02                       ; int domain - AF_INET = 2 used for IPv4 Internet protocols
@@ -73,9 +76,15 @@ _network:
         cmp rax, 0x00
         jl _connect_failed                  ; jump if connection fails 
         call _connect_created
+
+        mov rsp, rbp                        ; dealocating the stack
+        pop rbp
         ret
 
     .shutdown_socket:
+        push rbp                            ; Prologue
+        mov rbp, rsp
+
         mov rax, 0x30                       ; shutdown syscall , it stops communication
         mov rdi, qword [socket_fd]          ; (sfd) socket file descriptor
         mov rsi, 0x2                        ; shuwdown RW, Disables further send and receive operations
@@ -93,6 +102,9 @@ _network:
         cmp rax, 0x0
         jne _network.close_socket           ; retry close_socket
         call _close_msg
+
+        mov rsp, rbp                        ; dealocating the stack
+        pop rbp
         ret
 
 
@@ -303,6 +315,8 @@ _file_output:
     mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
     mov     rsi, output                 ;Our sort array is saved in output
     call    print_to_file
+
+    call    confirmation_msg            ;print confirmation message
     
     mov     rsp, rbp                    ; dealocating the stack
     pop     rbp
@@ -397,6 +411,13 @@ _close_msg:
     call _print_to_terminal
     ret        
 
+_confirmation_msg:
+    ; print  confirmation msg
+    push confirmation_msg_l
+    push confirmation_msg
+    call _print_to_terminal
+    ret      
+
 
 _exit:
     call _file_output.close_file
@@ -426,6 +447,9 @@ section .data
 
     close_t_msg:   db "Socket closed.", 0xA, 0x0
     close_t_msg_l: equ $ - close_t_msg
+
+    confirmation_msg:   db "Look for 'ClientOutput.txt' file in your current directory for output.", 0xA, 0x0
+    confirmation_msg_l: equ $ - confirmation_msg
 
     prompt_msg:    db "Enter any value between (0x)100 and (0x)4FF", 0xA, 0x00
     prompt_msg_l: equ $ - prompt_msg
