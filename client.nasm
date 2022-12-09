@@ -19,7 +19,6 @@ PROT_READ       equ 0x01
 PROT_WRITE      equ 0x02
 PROT_EXEC       equ 0x04
 
-;*****************************
 struc sockaddr_in_type
 ; defined in man ip(7) because it's dependent on the type of address
     .sin_family:        resw 1
@@ -28,27 +27,35 @@ struc sockaddr_in_type
     .sin_zero:          resd 2          ; padding       
 endstruc
 
-;*****************************
-
 
 section .text
 global _start
 
 _start:
-    call _network
+    call _network                           ; Establish socket and connection to server
 
-    call _client
+    call _client                            ; Prompt user for # of requested bytes and send request to server
 
-    sub rax, 0x1
-    push rax
-    call _sort
+    call _asciiToHex                        ; Convert the # of requested bytes from ascii to hex
+    mov [array_length], rax                 ; Save return value from _asciiToHex (value of the # of bytes requested)
     
-    call _file_output
+    push rax                                ; Pass return value from _asciiToHex to both memory allocation function calls
+    call _memory_allocation
+    mov [random_array_ptr], rax             ; Save the return value from memory allocation function (created array for unsorted bytes)
 
-    add rsp, 0x8                            ; Clearing pushed rax value from earlier
+    call _memory_allocation
+    mov [output_array_ptr], rax             ; Save the return value from memory allocation function (created array for sorted output)
 
+    call _client.read_from_the_socket       ; Read bytes random bytes that were sent from the server into random_array_ptr array
 
-    jmp _exit
+    push rax                                ; Pass # of bytes read from the socket to _sort and _file_output functtions
+    call _sort                              ; Use counting sort to store the data. Output is in output_array_ptr
+    
+    call _file_output                       ; Print output to the file
+
+    add rsp, 0x10                           ; Cleaning up the stack
+
+    jmp _exit                               ; Close file descriptors / socket and clean up the heap
 
 _network:
         push rbp                            ; Prologue
@@ -108,10 +115,10 @@ _network:
         ret
 
 
-
-
 _client:
     .prompt:
+        push rbp                            ; Prologue
+        mov rbp, rsp
 
         push prompt_msg_l                   ; C Calling Convention to prompt user
         push prompt_msg                     ; to input their desired number of bytes
@@ -123,125 +130,141 @@ _client:
         mov rsi, msg_buf                    ; a dedicated buffer
         mov rdx, 0x04                       
         syscall
+
+        cmp rax, 0x4                        ; Ensure that the user entered 4 character (3 numbers + enter)
+        jne _user_entry_error
         
     .write:
-        
         mov rax, 0x01                       ; write syscall to send requested bytes to server
-        mov rdi, qword[socket_fd]           ; to write the user input buffer
-        mov rsi, msg_buf                    ; into the socket created earlier
+        mov rdi, qword[socket_fd]           ; write to the created socket fd
+        mov rsi, msg_buf                    ; send the user input (100-4FF)
         mov rdx, 0x04                       
         syscall
 
-        mov rax, 35                         ; sleep syscall serves to delay program execution
-        mov rdi, delay                      ; to allow the sending of bytes
-        mov rsi, 0                          ; to be completed before the next read
-        syscall                             ; reaches the end of the file
+        mov rax, 35                         ; Sleep syscall serves to delay program execution
+        mov rdi, delay                      ; Delay of 1 second allows the server to write all bytes to the socket
+        mov rsi, 0                          ; before completed before the client reads from the socket
+        syscall                             ; reaches the end of the file.
+
+        mov rsp, rbp                        ; Epilogue
+        pop rbp
+        ret
 
     .read_from_the_socket:
+        push rbp                            ; Prologue
+        mov rbp, rsp
+
+        mov r13, [random_array_ptr]
 
         mov rax, 0x00                       ; read syscall to read random bytes from server 
         mov rdi, qword[socket_fd]           ; retrieve the returned output from the server at the socket
-        mov rsi, random_array               ; Read result into 
-        mov rdx, 0x500                      
+        mov rsi, r13                        ; Read result into 
+        mov rdx, [array_length]                      
         syscall
-              
+        
+        cmp rax, [array_length]            ; Confirm that # of bytes received == # of bytes requested
+        jne _receive_error
+
+
+        mov rsp, rbp                        ; dealocating the stack
+        pop rbp
         ret
 
 
 _sort:
     push rbp                            ; Prologue
     mov rbp, rsp
-
+    
+    mov r13, [random_array_ptr]
 
     ; LOOP 1 
     ; Find the max value in the array, go from 0 to the size of the recieved array
-    mov r8, 0x0                         ; Set the counter to zero
-    mov bl, byte [random_array]         ; Set the first value as the max (bl is the temp max variable to reduce mov's)
+    mov r8, 0x0                             ; Set the counter to zero
+    mov bl, byte [r13]                      ; Set the first value as the max (bl is the temp max variable to reduce mov's)
     .MaxLoop:
-    cmp bl, byte [random_array + r8]    ; Compare the current arry value to the max
-    jg .MaxLoopSkip                     ; If less than or equal to the max then skip
+        cmp bl, byte [r13 + r8]             ; Compare the current arry value to the max
+        jg .MaxLoopSkip                     ; If less than or equal to the max then skip
 
-    mov bl, byte [random_array + r8]    ; Else set new max value stored to bl
+        mov bl, byte [r13 + r8]             ; Else set new max value stored to bl
 
-    .MaxLoopSkip:
-    cmp r8, [rbp + 0x10]                ; Compare against total number of elements in array (size of array was passed via stack)
-    jge .MaxLoopEnd                     
-    inc r8
-    jmp .MaxLoop
-    .MaxLoopEnd:
-    push rbx                             ; Pass the max value (in bl) to malloc function
+        .MaxLoopSkip:
+        cmp r8, [rbp + 0x10]                ; Compare against total number of elements in array (size of array was passed via stack)
+        jge .MaxLoopEnd                     
+        inc r8                              ; Increment counter
+        jmp .MaxLoop                        ; Repeat
+        .MaxLoopEnd:
+        push rbx                            ; Pass the max value (in bl) to malloc function
 
 
     ; MEMORY CREATION FOR COUNT ARRAY
     ; Dynamically create an array "count" of the size of the maximum value in the array
-    call _memAllocation
-    mov r15, rax                        ; Save the return value from mmap into r15 for direct use
-    xor rax, rax                        ;r15 will be used to reference the newly created count array that is the size the max value in the original array
-
+    call _memory_allocation
+    mov r15, rax                            ; Save the return value from mmap into r15 to access the array for counting values
+    xor rax, rax                            ; Clear rax for use later
 
     ; LOOP 2
     ; Increment the count of occurences in the count array at each values position respective position in the array (eg 4 -> count[4]++)
-    mov r8, 0x0                         ; Set counter to zero
+    mov r8, 0x0                             ; Set counter to zero
     mov rbx, 0x0
-    mov r9, [rbp + 0x10]                ; Load r9 with the number of characters
-    dec r9                              ; Subtract 1 from r9 cause array starts from zero
+    mov r9, [rbp + 0x10]                    ; Load r9 with the number of characters
+    dec r9                                  ; Subtract 1 from r9 cause array starts from zero
     .CountLoop:
-    mov bl, byte [random_array + r8]    ; Get current value from the main array
-    mov al, byte [r15 + rbx]            ; Use current value to access its literal index in the count array (# of occurences for each val at their respective locations)
-    inc rax                             ; Increase the count of the number of occurences of the current value by 1
-    mov [r15 + rbx], al                 ; Replace old value with incremented occurences count value
-    
-    cmp r8, r9                          ; Check to see if the end of the array has been reached
-    jge .CountLoopEnd                   ; End if yes, increment and repeat if no
-    inc r8  
-    jmp .CountLoop
-    .CountLoopEnd:
+        mov bl, byte [r13 + r8]             ; Get current value from the main array
+        mov al, byte [r15 + rbx]            ; Use current value to access its literal index in the count array (# of occurences for each val at their respective locations)
+        inc rax                             ; Increase the count of the number of occurences of the current value by 1
+        mov [r15 + rbx], al                 ; Replace old value with incremented occurences count value
+        
+        cmp r8, r9                          ; Check to see if the end of the array has been reached
+        jge .CountLoopEnd                   ; End if yes, if no increment and repeat
+        inc r8  
+        jmp .CountLoop
+        .CountLoopEnd:
 
 
     ; LOOP 3
     ; Perform running count of count array (add every the previous index to the current index)
-    mov r8, 0x1                         ; Counter, start at 1 because we will be adding the previous value to the current value
+    mov r8, 0x1                             ; Counter, start at 1 because we will be adding the previous value to the current value
     .RunningCountLoop:                  
-    mov al, byte [r15 + r8]             ; Get the current number of occurences at the given index in count array
-    mov bl, byte [r15 + r8 -1]          ; Get the number of occurences at the previous index
-    add al, bl                          ; Add the values together
-    mov [r15 + r8], al
+        mov al, byte [r15 + r8]             ; Get the current number of occurences at the given index in count array
+        mov bl, byte [r15 + r8 -1]          ; Get the number of occurences at the previous index
+        add al, bl                          ; Add the values together
+        mov [r15 + r8], al
 
-    cmp r8, [rbp - 0x8]                 ; Compare against the maximum value in found in the array from earlier
-    jge .RunningCountLoopEnd
-    inc r8                              ; Increment the counter 
-    jmp .RunningCountLoop               ; Repeat
-    .RunningCountLoopEnd:
+        cmp r8, [rbp - 0x8]                 ; Compare against the maximum value in found in the array from earlier
+        jge .RunningCountLoopEnd
+        inc r8                              ; Increment the counter 
+        jmp .RunningCountLoop               ; Repeat
+        .RunningCountLoopEnd:
 
 
     ; LOOP 4
     ; Go back through the array, go to each values position in the count array and put it in the output array at the sum position held in the count array
-    mov r8, [rbp + 0x10]                ; start at the end of the array
+    mov r14, [output_array_ptr]
+    mov r8, [rbp + 0x10]                    ; start at the end of the array
     dec r8
     .InsertionLoop:
-    mov al, byte [random_array + r8]    ; Load the value from the current array position
-    mov bl, byte [r15 + rax]            ; Use the array value to access its corresponding cummulative value in the count array
-    mov [output + rbx - 1], al          ; Insert this value into the output array at the index of the cumulative value from above
-    dec bl                              ; Decrement the cumulative value
-    mov [r15 + rax], bl                 ; Return decremented cumulative to count array
+        mov al, byte [r13 + r8]             ; Load the value from the current array position
+        mov bl, byte [r15 + rax]            ; Use the array value to access its corresponding cummulative value in the count array
+        mov [r14 + rbx - 1], al             ; Insert this value into the output array at the index of the cumulative value from above
+        dec bl                              ; Decrement the cumulative value
+        mov [r15 + rax], bl                 ; Return decremented cumulative to count array
 
-    cmp r8, 0x0                         ; if counter is zero (at last element) end the loop, else decrement and repeat
-    jle .InsertionLoopEnd
-    
-    dec r8
-    jmp .InsertionLoop
-    .InsertionLoopEnd:
+        cmp r8, 0x0                         ; if counter is zero (at last element) end the loop, else decrement and repeat
+        jle .InsertionLoopEnd
+        dec r8                              ; Decrement counter
+        jmp .InsertionLoop                  ; Repeat
+        .InsertionLoopEnd:
 
-    push r15
-    call _memFree
+    push rbx                                ; Pass length of count array to memory free
+    push r15                                ; Pass pointer to count array
+    call _memory_free                       ; Free count array
 
-
-    add rsp, 0x10                        ; Remove rbx (max value) from the stack that was passed earlier and r15 (created count array)
-    mov rsp, rbp                         ; Epilogue
+    add rsp, 0x18                           ; Remove rbx (max value) from the stack that was passed earlier and r15 (created count array)
+    mov rsp, rbp                            ; Epilogue
     pop rbp
     ret
 
-_memAllocation:
+_memory_allocation:
     push rbp                            ; Prologue
     mov rbp, rsp
 
@@ -261,7 +284,7 @@ _memAllocation:
     pop rbp
     ret
 
-_memFree:
+_memory_free:
     push rbp                ; Prologue
     mov rbp, rsp
 
@@ -280,71 +303,75 @@ _file_output:
     mov rbp, rsp
     
     .Open_file:
-    mov     rax, 0x2                    ;open syscall
-    mov     rdi, filename               ;open the file if the file have existed
-    mov     rsi, 0x442                  ;append, creat and read/write permisions (creat will create the file if it does not exist)
-    mov     rdx, 0q666                  ;permisions for creat to work if needed
-    syscall
+        mov     rax, 0x2                    ;open syscall
+        mov     rdi, filename               ;open the file if the file have existed
+        mov     rsi, 0x442                  ;append, creat and read/write permisions (creat will create the file if it does not exist)
+        mov     rdx, 0q666                  ;permisions for creat to work if needed
+        syscall
 
-    cmp     rax, -1                      ;if rax = -1, the file had an error.     
-    jle      .Creat_file_error           ;jump to error message
-    mov     [Handle], rax               ;save our file descriptor 
-    jmp     .Print_IN_file              ;jump to print in file
+        cmp     rax, -1                      ;if rax = -1, the file had an error.     
+        jle      .Creat_file_error           ;jump to error message
+        mov     [file_fd], rax               ;save our file descriptor 
+        jmp     .print_in_file              ;jump to print in file
 
     .Creat_file_error:                   ;check the create is error or not 
-    mov     rax, 0x1    
-    mov     rdi, 1
-    mov     rsi, Creat_file_error
-    mov     rdx, Creat_file_error_L     ;print "This file create error, Please try again"
-    syscall
-    jmp     _exit                       
+        mov     rax, 0x1    
+        mov     rdi, 1
+        mov     rsi, Creat_file_error
+        mov     rdx, Creat_file_error_L     ;print "This file create error, Please try again"
+        syscall
+        jmp     _exit                       
 
-    .Print_IN_file:
-    mov     rdx, NoSort_notice_L  
-    mov     rsi, NoSort_notice
-    call    print_to_file               ;print "This is beginning of No sort data:" in file
+    .print_in_file:
+        mov r13, [random_array_ptr]
+        mov r14, [output_array_ptr]
 
-    mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
-    mov     rsi, random_array           ;Our sort array is saved in random_array
-    call    print_to_file
+        mov     rdx, NoSort_notice_L  
+        mov     rsi, NoSort_notice
+        call    .print_to_file               ;print "This is beginning of No sort data:" in file
 
-    mov     rdx, Sort_notice_L          
-    mov     rsi, Sort_notice            
-    call    print_to_file               ;print "This is beginning of sort data:" in file
+        mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
+        mov     rsi, r13                    ;Our sort array is saved in random_array
+        call    .print_to_file
 
-    mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
-    mov     rsi, output                 ;Our sort array is saved in output
-    call    print_to_file
+        mov     rdx, Sort_notice_L          
+        mov     rsi, Sort_notice            
+        call    .print_to_file              ;print "This is beginning of sort data:" in file
 
-    call    _confirmation_msg            ;print confirmation message
-    
-    mov     rsp, rbp                    ; dealocating the stack
-    pop     rbp
-    ret
+        mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
+        mov     rsi, r14                    ;Our sort array is saved in output
+        call    .print_to_file
+
+        call    _confirmation_msg            ;print confirmation message
+        
+        mov     rsp, rbp                     ; dealocating the stack
+        pop     rbp
+        ret
 
 
-    print_to_file:
-    push rbp                            ;Prologue
-    mov rbp, rsp
+    .print_to_file:
+        push rbp                            ;Prologue
+        mov rbp, rsp
 
-    mov     rax, 0x1                
-    mov     rdi, [Handle]
-    syscall
+        mov     rax, 0x1                
+        mov     rdi, [file_fd]
+        syscall
 
-    mov     rsp, rbp                    ; dealocating the stack
-    pop     rbp
-    ret
+        mov     rsp, rbp                    ; dealocating the stack
+        pop     rbp
+        ret
 
-    close_file:
-    push rbp
-    mov rbp, rsp
+    .file_close:
+        push rbp
+        mov rbp, rsp
 
-    mov rax, 0x3                        ;close file syscall
-    mov rdi, [Handle]                   ;clean the file descriptor
+        mov rax, 0x3                        ;close file syscall
+        mov rdi, [file_fd]                   ;clean the file descriptor
+        syscall 
 
-    mov rsp, rbp                    ; dealocating the stack
-    pop rbp
-    ret
+        mov rsp, rbp                        ; dealocating the stack
+        pop rbp
+        ret
 
 _print_to_terminal:
     
@@ -367,7 +394,39 @@ _print_to_terminal:
 
     ret 0x10  
 
+_asciiToHex:
+    push rbp
+    mov rbp, rsp
 
+    .converter:
+        mov rsi, 0x0                    ; Set counter to 0
+        xor r8, r8                      ; Clear previous memory address from result register
+        .loop:
+        mov bl, byte [msg_buf + rsi]    ; Load one letter from array into bl 
+        sub bl, 0x30                    ; Subtract ascii offset
+        cmp bl, 0x9                     ; Compare with 9
+        jle .skip                       ; If less than or equal to 9 then skip
+        sub bl, 0x20                    ; If greater than 9 then subtract ascii offset for character (A-F)
+        .skip:
+        add r8, rbx                     ; Add converted hex value to register r8
+        cmp rsi, 0x2                    ; Check to see if we are at the end of the input 
+        jz .tail                        ; If so, jump to .tail to avoid shifting register
+        inc rsi                         ; Incremenst rsi to move to next character
+        shl r8, 0x4                     ; Shift r8 register 4 bits to the left to shift the power of 16 (last ascii character will end up as 16^0 and all other increment by 16^1 in each shift)
+        jmp .loop                       ; Jump back to .loop
+        .tail:
+        mov rax, r8         ; Save the converted number address
+    
+    .checker:                           ; Check that converted value was between 0x100 and 0x4FF
+        cmp rax, 0x100
+        jl _user_entry_error
+        cmp rax, 0x4FF
+        jg _user_entry_error
+
+    mov rsp, rbp                     ; dealocating the stack
+    pop rbp
+
+    ret
 
 _socket_failed:
     ; print socket failed
@@ -418,12 +477,33 @@ _confirmation_msg:
     call _print_to_terminal
     ret      
 
+_receive_error:
+    ; Print error message for incorrect # of bytes received from server
+    push receive_error_msg_l
+    push receive_error_msg
+    call _print_to_terminal
+    jmp _exit
+
+_user_entry_error:
+    push user_entry_error_l
+    push user_entry_error
+    call _print_to_terminal
+    jmp _exit
 
 _exit:
-    call _file_output.close_file
-    call _network.shutdown_socket       
+    call _file_output.file_close        ; Close the open file for output
+    call _network.shutdown_socket       ; Close the open socket
 
-    mov rax, 60                         ;exit syscall
+    push qword [array_length]
+    push qword [random_array_ptr]
+    call _memory_free                   ; Free the unsorted array
+
+    push qword [array_length]
+    push qword [random_array_ptr]
+    call _memory_free                   ; Free the output array
+
+    add rsp, 0x20                       ; Cleanup the stack
+    mov rax, 60                         ; Exit syscall
     mov rdi, 0
     syscall
 
@@ -448,23 +528,30 @@ section .data
     close_t_msg:   db "Socket closed.", 0xA, 0x0
     close_t_msg_l: equ $ - close_t_msg
 
-    confirmation_msg:   db "Look for 'ClientOutput.txt' file in your current directory for output.", 0xA, 0x0
+    confirmation_msg:   db 0xa, "Success! Look for 'ClientOutput.txt' file in your current directory for the results.", 0xa, 0xa, 0x0
     confirmation_msg_l: equ $ - confirmation_msg
 
-    prompt_msg:    db "Enter any value between (0x)100 and (0x)4FF", 0xA, 0x00
+    prompt_msg:    db "Enter any value between (0x)100 and (0x)4FF:", 0xa, 0x0
     prompt_msg_l: equ $ - prompt_msg
 
-    delay dq 1, 000000000
+    receive_error_msg: db "Error receiving correct number of bytes from server.", 0xa, 0x0
+    receive_error_msg_l: equ $ - receive_error_msg
+
+    user_entry_error: db "Entered value was not between (0x)100 and (0x)4FF.", 0xa, 0x0
+    user_entry_error_l: equ $ - user_entry_error
+
+
+    delay dq 1, 000000000  ; # of seconds for sleep
 
     filename: db 'ClientOutput.txt', 0x0    ; the filename to create
 
-    Creat_file_error:  db "This file create error, Please try again", 0xA, 0x0
+    Creat_file_error:  db "File error. Please try again", 0xA, 0x0
     Creat_file_error_L: equ $ - Creat_file_error
 
-    NoSort_notice: db 0xa, 0xa, "This is beginning of No sort data:", 0xa, 0x0
+    NoSort_notice: db 0xa, 0xa "Unsorted data:", 0xa, 0x0
     NoSort_notice_L: equ $ - NoSort_notice
 
-    Sort_notice: db 0xa, 0xa, "This is beginning of sort data:", 0xA, 0x0
+    Sort_notice: db 0xa, 0xa, "Sorted data:", 0xA, 0x0
     Sort_notice_L: equ $ - Sort_notice
 
     sockaddr_in: 
@@ -478,8 +565,9 @@ section .data
     sockaddr_in_l:  equ $ - sockaddr_in
 
 section .bss
-    socket_fd:               resq 1             ; socket file descriptor
-    msg_buf:                 resb 4             ; message buffer
-    random_array:            resb 0x500         ; reserve 500 bytes
-    output:                  resb 0x500         ; Space for output array in _sort
-    Handle:                  resq 10
+    socket_fd:               resq 0x1       ; socket file descriptor
+    msg_buf:                 resb 0x4       ; buffer for user input
+    array_length:            resq 0x1       ; lenght of both random and output arrays
+    random_array_ptr:        resq 0x1       ; pointer to received array on the heap
+    output_array_ptr:        resq 0x1       ; pointer to output on heap
+    file_fd:                 resq 0x1       ; File descriptor for output       
