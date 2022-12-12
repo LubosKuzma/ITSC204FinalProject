@@ -43,7 +43,7 @@ section .data
     bind_t_msg_l: equ $ - bind_t_msg
     bind_f_msg:   db "Socket failed to bind.", 0xA, 0x0
     bind_f_msg_l: equ $ - bind_f_msg
-    file: db "data.txt", 0x00
+    file db "readme.txt", 0x0
 
         sockaddr_in: 
         istruc sockaddr_in_type 
@@ -65,9 +65,12 @@ section .text
 _start:
     push rbp
     mov rbp, rsp
+    call _create_file_and_store.create
     call _network.init
     call _send_rec
-
+    push 0x100
+    push rec_buffer
+    call _create_file_and_store.write
     jmp _exit
 
 _network:
@@ -115,11 +118,11 @@ _send_rec:
     mov r8, 0x00
     mov r9, 0x00
     syscall
-    .rec:                               ; setup break in gdb by "b _send_rec.rec" to examine the buffer
+    .rec:                              ; setup break in gdb by "b _send_rec.rec" to examine the buffer
                                         ; your rec_buffer will now be filled with 0x100 bytes
     call print_rec_buffer               ; before the sort
-    call gnome_sort                     ; call gnome sort function
-    call print_rec_buffer               ; after the sort.
+   ; call gnome_sort                     ; call gnome sort function
+   ; call print_rec_buffer               ; after the sort.
     ret
 
 ;print the bytes recieved from server. Error checking if its stored in the rec_buffer correctly.
@@ -163,17 +166,17 @@ call print_rec_buffer
 ret ; return from function
 
 _create_file_and_store:
-    _create:                    ; creating the file
+    .create:                    ; creating the file
 
         mov rax, 0x55
         mov rdi, file
-        mov rsi, 0777           ; read, write and execution to all
+        mov rsi, 511           ; read, write and execution to owner, read and execution to group and others.
         syscall
 
         mov [file_fd], rax      ; moving file desprictor for new file created
         ret
 
-    _write:
+    .write:
 
         push rbp
         mov rbp, rsp
@@ -191,7 +194,7 @@ _create_file_and_store:
         pop rbp
         ret 0x10                    ; clean up stack upon return
 
-    _read:
+    .read:
 
         push rbp
         mov rbp, rsp
@@ -209,7 +212,7 @@ _create_file_and_store:
         pop rbp
         ret 0x10
 
-    _close:
+    .close:
 
         mov rax, 0x3        
         mov rdi, [file_fd]
