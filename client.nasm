@@ -1,11 +1,12 @@
 ; by Benjamin, Monik, Hasan, Yu Jin
 ; ISS Program, SAIT
-; 
+; December 11th, 2022
 ; x86-64, NASM
-
 ; *******************************
 ; Functionality of the program:
-; 
+; Make a request to a server for a specified number 
+; of bytes and sort the bytes using counting sort.
+; Write the results to a file.
 ; *******************************
 
 ; Values for malloc
@@ -48,12 +49,11 @@ _start:
 
     call _client.read_from_the_socket       ; Read bytes random bytes that were sent from the server into random_array_ptr array
 
-    push rax                                ; Pass # of bytes read from the socket to _sort and _file_output functtions
     call _sort                              ; Use counting sort to store the data. Output is in output_array_ptr
     
     call _file_output                       ; Print output to the file
 
-    add rsp, 0x10                           ; Cleaning up the stack
+    add rsp, 0x8                           ; Cleaning up the stack
 
     jmp _exit                               ; Close file descriptors / socket and clean up the heap
 
@@ -165,7 +165,6 @@ _client:
         cmp rax, [array_length]            ; Confirm that # of bytes received == # of bytes requested
         jne _receive_error
 
-
         mov rsp, rbp                        ; dealocating the stack
         pop rbp
         ret
@@ -178,26 +177,25 @@ _sort:
     mov r13, [random_array_ptr]
 
     ; LOOP 1 
-    ; Find the max value in the array, go from 0 to the size of the recieved array
-    mov r8, 0x0                             ; Set the counter to zero
-    mov bl, byte [r13]                      ; Set the first value as the max (bl is the temp max variable to reduce mov's)
+    ; Find the max value in the array
+    mov r8, 0x1                             ; Set the counter to one (first element will be set to the max already)
+    mov bl, byte [r13]                      ; Set the first value as the max (bl is the max value holder)
     .MaxLoop:
-        cmp bl, byte [r13 + r8]             ; Compare the current arry value to the max
-        jg .MaxLoopSkip                     ; If less than or equal to the max then skip
-
-        mov bl, byte [r13 + r8]             ; Else set new max value stored to bl
-
+        cmp bl, byte [r13 + r8]             ; Compare the current array value to the current max value
+        jge .MaxLoopSkip                    ; If the max value is greater than or equal to then skip
+        mov bl, byte [r13 + r8]             ; Else set new max value in bl
         .MaxLoopSkip:
-        cmp r8, [rbp + 0x10]                ; Compare against total number of elements in array (size of array was passed via stack)
+        cmp r8, [array_length]              ; Compare against total number of elements in array
         jge .MaxLoopEnd                     
         inc r8                              ; Increment counter
         jmp .MaxLoop                        ; Repeat
         .MaxLoopEnd:
+        add rbx, 0x1                        ; Add one for zero indexing
         push rbx                            ; Pass the max value (in bl) to malloc function
 
 
     ; MEMORY CREATION FOR COUNT ARRAY
-    ; Dynamically create an array "count" of the size of the maximum value in the array
+    ; Dynamically create an array "count" of the size of the maximum value in the array (Each array position in count will represent each value in the original array) 
     call _memory_allocation
     mov r15, rax                            ; Save the return value from mmap into r15 to access the array for counting values
     xor rax, rax                            ; Clear rax for use later
@@ -206,14 +204,13 @@ _sort:
     ; Increment the count of occurences in the count array at each values position respective position in the array (eg 4 -> count[4]++)
     mov r8, 0x0                             ; Set counter to zero
     mov rbx, 0x0
-    mov r9, [rbp + 0x10]                    ; Load r9 with the number of characters
-    dec r9                                  ; Subtract 1 from r9 cause array starts from zero
+    mov r9, [array_length]                  ; Load r9 with the number of characters
+    dec r9                                  ; Subtract 1 from r9 (zero indexing)
     .CountLoop:
         mov bl, byte [r13 + r8]             ; Get current value from the main array
         mov al, byte [r15 + rbx]            ; Use current value to access its literal index in the count array (# of occurences for each val at their respective locations)
         inc rax                             ; Increase the count of the number of occurences of the current value by 1
         mov [r15 + rbx], al                 ; Replace old value with incremented occurences count value
-        
         cmp r8, r9                          ; Check to see if the end of the array has been reached
         jge .CountLoopEnd                   ; End if yes, if no increment and repeat
         inc r8  
@@ -222,15 +219,15 @@ _sort:
 
 
     ; LOOP 3
-    ; Perform running count of count array (add every the previous index to the current index)
+    ; Perform running count of count array (add every previous index to the current index)
     mov r8, 0x1                             ; Counter, start at 1 because we will be adding the previous value to the current value
     .RunningCountLoop:                  
         mov al, byte [r15 + r8]             ; Get the current number of occurences at the given index in count array
         mov bl, byte [r15 + r8 -1]          ; Get the number of occurences at the previous index
         add al, bl                          ; Add the values together
-        mov [r15 + r8], al
+        mov [r15 + r8], al                  ; Load sum into current index
 
-        cmp r8, [rbp - 0x8]                 ; Compare against the maximum value in found in the array from earlier
+        cmp r8, [rbp - 0x8]                 ; Compare against the maximum value in the array from earlier
         jge .RunningCountLoopEnd
         inc r8                              ; Increment the counter 
         jmp .RunningCountLoop               ; Repeat
@@ -240,26 +237,26 @@ _sort:
     ; LOOP 4
     ; Go back through the array, go to each values position in the count array and put it in the output array at the sum position held in the count array
     mov r14, [output_array_ptr]
-    mov r8, [rbp + 0x10]                    ; start at the end of the array
-    dec r8
+    mov r8, [array_length]                  ; Start at the end of the array
+    dec r8                                  ; -1 (zero indexing)
     .InsertionLoop:
-        mov al, byte [r13 + r8]             ; Load the value from the current array position
+        mov al, byte [r13 + r8]             ; Load the value from the current array position in original input array into al
         mov bl, byte [r15 + rax]            ; Use the array value to access its corresponding cummulative value in the count array
-        mov [r14 + rbx - 1], al             ; Insert this value into the output array at the index of the cumulative value from above
+        mov [r14 + rbx - 1], al             ; Insert this value into the output array at the index of the cumulative value from above (-1 cause zero indexing)
         dec bl                              ; Decrement the cumulative value
-        mov [r15 + rax], bl                 ; Return decremented cumulative to count array
+        mov [r15 + rax], bl                 ; Return decremented cumulative value to count array (means next time we won't put the same value in the same position)
 
-        cmp r8, 0x0                         ; if counter is zero (at last element) end the loop, else decrement and repeat
+        cmp r8, 0x0                         ; If counter is zero (at last element) end the loop, else decrement and repeat
         jle .InsertionLoopEnd
         dec r8                              ; Decrement counter
         jmp .InsertionLoop                  ; Repeat
         .InsertionLoopEnd:
 
-    push rbx                                ; Pass length of count array to memory free
-    push r15                                ; Pass pointer to count array
-    call _memory_free                       ; Free count array
+                                            ; length of count array to pass to memory free is already loaded on the stack (push rbx, after loop 1)
+    push r15                                ; Pass pointer to start of count array
+    call _memory_free                       ; Free the created count array
 
-    add rsp, 0x18                           ; Remove rbx (max value) from the stack that was passed earlier and r15 (created count array)
+    add rsp, 0x10                           ; Remove rbx (max value) from the stack that was passed earlier and r15 (created count array)
     mov rsp, rbp                            ; Epilogue
     pop rbp
     ret
@@ -330,7 +327,7 @@ _file_output:
         mov     rsi, NoSort_notice
         call    .print_to_file               ;print "This is beginning of No sort data:" in file
 
-        mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
+        mov     rdx, [array_length]           ;Our length of array is saved in [rbp+0x10]
         mov     rsi, r13                    ;Our sort array is saved in random_array
         call    .print_to_file
 
@@ -338,15 +335,15 @@ _file_output:
         mov     rsi, Sort_notice            
         call    .print_to_file              ;print "This is beginning of sort data:" in file
 
-        mov     rdx, [rbp + 0x10]           ;Our length of array is saved in [rbp+0x10]
+        mov     rdx, [array_length]           ;Our length of array is saved in [rbp+0x10]
         mov     rsi, r14                    ;Our sort array is saved in output
         call    .print_to_file
 
         call    _confirmation_msg            ;print confirmation message
         
-        mov     rsp, rbp                     ; dealocating the stack
-        pop     rbp
-        ret
+    mov     rsp, rbp                     ; dealocating the stack
+    pop     rbp
+    ret
 
 
     .print_to_file:
@@ -400,13 +397,13 @@ _asciiToHex:
 
     .converter:
         mov rsi, 0x0                    ; Set counter to 0
-        xor r8, r8                      ; Clear previous memory address from result register
+        xor r8, r8                      ; Clear result register
         .loop:
         mov bl, byte [msg_buf + rsi]    ; Load one letter from array into bl 
         sub bl, 0x30                    ; Subtract ascii offset
         cmp bl, 0x9                     ; Compare with 9
         jle .skip                       ; If less than or equal to 9 then skip
-        sub bl, 0x20                    ; If greater than 9 then subtract ascii offset for character (A-F)
+        sub bl, 0x7                     ; If greater than 9 then subtract ascii offset for character (A-F)
         .skip:
         add r8, rbx                     ; Add converted hex value to register r8
         cmp rsi, 0x2                    ; Check to see if we are at the end of the input 
@@ -415,18 +412,18 @@ _asciiToHex:
         shl r8, 0x4                     ; Shift r8 register 4 bits to the left to shift the power of 16 (last ascii character will end up as 16^0 and all other increment by 16^1 in each shift)
         jmp .loop                       ; Jump back to .loop
         .tail:
-        mov rax, r8         ; Save the converted number address
+        mov rax, r8                     ; Save the converted number to rax for return
     
     .checker:                           ; Check that converted value was between 0x100 and 0x4FF
         cmp rax, 0x100
         jl _user_entry_error
         cmp rax, 0x4FF
         jg _user_entry_error
-
-    mov rsp, rbp                     ; dealocating the stack
+                                     
+    mov rsp, rbp                        ; dealocating the stack
     pop rbp
 
-    ret
+    ret                                 ; Return value in rax
 
 _socket_failed:
     ; print socket failed
@@ -548,7 +545,7 @@ section .data
     Creat_file_error:  db "File error. Please try again", 0xA, 0x0
     Creat_file_error_L: equ $ - Creat_file_error
 
-    NoSort_notice: db 0xa, 0xa "Unsorted data:", 0xa, 0x0
+    NoSort_notice: db 0xa, 0xa, "Unsorted data:", 0xa, 0x0
     NoSort_notice_L: equ $ - NoSort_notice
 
     Sort_notice: db 0xa, 0xa, "Sorted data:", 0xA, 0x0
