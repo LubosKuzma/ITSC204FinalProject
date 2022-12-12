@@ -43,7 +43,7 @@ section .data
     bind_t_msg_l: equ $ - bind_t_msg
     bind_f_msg:   db "Socket failed to bind.", 0xA, 0x0
     bind_f_msg_l: equ $ - bind_f_msg
-    file db "readme.txt", 0x0
+    file db "data.txt", 0x0
 
         sockaddr_in: 
         istruc sockaddr_in_type 
