@@ -421,31 +421,6 @@ _write_fail:
     call _print
     jmp _exit
 
-_write_file_msg1:
-    call _write_to_file 
-    ret 
-
-_write_random:
-    ; Wrie random data to file
-    push rdx            ; number of bytes
-    push rsi             ; message to write (buffer)
-    call _write_to_file
-    ret
-
-_write_file_msg2:
-    ; Write to file "beginning of manipulated data"
-    push file_msg2_l            ; number of bytes 
-    push file_msg2              ; message to write ("Manipulated data")
-    call _write_to_file
-    ret
-
-_write_sorted:
-    ; Write sorted data to file
-    push rdx            ; number of bytes
-    push rsi             ; message to write (sorted buffer)
-    call _write_to_file
-    ret
-
 _close_socket:
     ; Close socket
     mov rax, 0x3                        ; close syscall
