@@ -2,25 +2,29 @@ section .text
 global _start
 
 _start:
-    mov rax, SYS_OPEN
     mov rdi, filename
-    mov rsi, O_RDONLY
-    mov rdx, 0
+    mov rsi, 0102o
+    mov rdx, 0666o
+    mov rax, 2
     syscall
 
-    push rax
-    mov rdi, rax
-    mov rax, SYS_READ
-    mov rsi, text
-    mov rdx. 17
+    mov [fd], rax
+    mov rdx, len
+    mov rsi, msg
+    mov rdi, [fd]
+    mov rax, 1
     syscall
 
-    mov rax, SYS_CLOSE
-    pop rdi
+    mov rdi, [fd]
+    mov rax, 3
     syscall
-    
 
-    section .bss
-    text resb 18
-    section .data
-    filename db "output.txt", 0
+    mov rax, 60
+    syscall
+
+section .data
+    msg db 'Hello World', 0xa
+    len equ $ - msg
+    filename db 'output.txt', 0
+    lenfilename equ $ - filename
+    fd dq 0
