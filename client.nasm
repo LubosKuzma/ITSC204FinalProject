@@ -132,8 +132,8 @@ _get_input:
     call _print
 
     ; Get user input for number of bytes
-    mov rax, 0x00
-    mov rdi, 0x00
+    mov rax, 0x00                               ; Read syscall
+    mov rdi, 0x00                               ; stdout
     mov rsi, byte_buffer
     mov rdx, 0x04
     syscall
@@ -148,22 +148,24 @@ _get_length:
     push rbp
     mov rbp, rsp
 
+    ; Take the user entered number and remove the '\n' from buffer
+    ; and convert ascii to hex to get proper length
     mov r8, [byte_buffer]
-    mov [byte_length], r8
-    xor r8, r8   
+    mov [byte_length], r8                           ; saves user input to byte_length
+    xor r8, r8                                      ; Clear register
     .loop:
-        lea rcx, [byte_length + r8]
-        mov al, byte [rcx]
-        cmp al, 0xA
-        je .end
-        call _ascii_to_hex
-        or rbx, rax
-        shl rbx, 4
-        inc r8
-        jmp .loop
+        lea rcx, [byte_length + r8]                 ; Take the byte at address of byte_length + index
+        mov al, byte [rcx]                          ; move the byte to al
+        cmp al, 0xA                                 ; compare to see if byte is newline character
+        je .end                                     ; If so, then end the loop
+        call _ascii_to_hex                          ; Convert byte to hex
+        or rbx, rax                                 ; rbx now has the byte
+        shl rbx, 4                                  ; Shift rbx to the left by 1 byte inorder to load the next byte
+        inc r8                                      ; Increment index       
+        jmp .loop                                   ; Keep looping until '\n' is found
         
         .end:
-            shr rbx, 4
+            shr rbx, 4                              ; At the end, shift right to get the correct length
 
             ; Prologue
             mov rsp, rbp
