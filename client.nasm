@@ -99,7 +99,7 @@ _start:
     jmp _exit
 
 _socket:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -125,13 +125,13 @@ _socket:
     call _connection_created
     ret
     
-    ; Prologue
+    ; Epilogue
     mov rsp, rbp
     pop rbp
     ret
 
 _get_input:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -147,13 +147,13 @@ _get_input:
     mov rdx, 0x04
     syscall
 
-    ; Prologue
+    ; Epilogue
     mov rsp, rbp
     pop rbp
     ret
 
 _get_length:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -176,7 +176,7 @@ _get_length:
         .end:
             shr rbx, 4                              ; At the end, shift right to get the correct length
 
-            ; Prologue
+            ; Epilogue
             mov rsp, rbp
             pop rbp
             ret
@@ -194,7 +194,7 @@ _ascii_to_hex:
     ret          
  
 _send_rec:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -218,13 +218,13 @@ _send_rec:
     .rec:                                  ; setup break in gdb by "b _send_rec.rec" to examine the buffer
     ; your array_ptr will now be filled with 0x100 bytes
     
-    ; Prologue
+    ; Epilogue
     mov rsp, rbp
     pop rbp
     ret
 
 _file:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -264,13 +264,13 @@ _file:
     mov rdi, qword [output_fd]              ; file descriptor   
     syscall
 
-    ; Prologue
+    ; Epilogue
     mov rsp, rbp
     pop rbp
     ret
 
 _write_to_file:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -278,13 +278,13 @@ _write_to_file:
     mov	rdi, [output_fd]                    ; file descriptor
     syscall
 
-    ; Prologue
+    ; Epilogue
     mov rsp, rbp
     pop rbp
     ret
 
 _insertion_sort:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -325,13 +325,13 @@ _insertion_sort:
             jmp _for_loop                   ; Loop for next position in array
 
     end_for_loop:
-        ; Prologue
+        ; Epilogue
         mov rsp, rbp
         pop rbp
         ret
 
 _malloc:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -347,13 +347,13 @@ _malloc:
     syscall
     mov [array_ptr], rax
 
-    ; Prologue
+    ; Epilogue
     mov rsp, rbp
     pop rbp
     ret
 
 _free:
-    ; Epilogue
+    ; Prologue
     push rbp
     mov rbp, rsp
 
@@ -364,13 +364,13 @@ _free:
     mov rsi, malloc_size
     syscall
 
-    ; Prologue
+    ; Epilogue
     mov rsp, rbp
     pop rbp
     ret
 
 _print:
-    ; prologue
+    ; Prologue
     push rbp
     mov rbp, rsp
     push rdi
@@ -385,7 +385,7 @@ _print:
     mov rdx, [rbp + 0x18]
     syscall
 
-    ; epilogue
+    ; Epilogue
     pop rsi
     pop rdi
     pop rbp
