@@ -99,6 +99,10 @@ _start:
     jmp _exit
 
 _socket:
+    ; Epilogue
+    push rbp
+    mov rbp, rsp
+
     ; Initialize socket
     mov rax, 0x29                               ; socket syscall
     mov rdi, 0x02                               ; int domain - AF_INET = 2, AF_LOCAL = 1
@@ -119,6 +123,11 @@ _socket:
     cmp rax, 0x00                               
     jl _connection_failed                       ; if rax < 0, connection failed to be created
     call _connection_created
+    ret
+    
+    ; Prologue
+    mov rsp, rbp
+    pop rbp
     ret
 
 _get_input:
