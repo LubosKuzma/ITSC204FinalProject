@@ -80,7 +80,7 @@ section .bss
     socket_fd:  resq 1                  ; socket file descriptor
     output_fd: resb 1                   ; output.txt file descriptor
     byte_buffer: resb 4                 ; buffer for the user entered bytes
-    byte_length: resb 4                 ; buffer for 
+    byte_length: resb 4                
 
 section .text
     global _start
