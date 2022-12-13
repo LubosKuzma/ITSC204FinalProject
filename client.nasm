@@ -283,7 +283,7 @@ _sort:
         mov ebx, [r15 + rcx]            ; Use the array value to access its corresponding cummulative value in the count array
         mov byte [r14 + rbx - 1], dl             ; Insert this value into the output array at the index of the cumulative value from above (-1 cause zero indexing)
         dec rbx                              ; Decrement the cumulative value
-        mov byte [r15 + rcx], bl                 ; Return decremented cumulative value to count array (means next time we won't put the same value in the same position)
+        mov [r15 + rcx], ebx                 ; Return decremented cumulative value to count array (means next time we won't put the same value in the same position)
 
         cmp r8, [array_length]                         ; If counter is zero (at last element) end the loop, else decrement and repeat
         jge .InsertionLoopEnd
@@ -587,14 +587,14 @@ section .data
     NoSort_notice: db 0xa, 0xa, "----- BEGINNING OF RANDOM DATA -----", 0xa, 0x0
     NoSort_notice_L: equ $ - NoSort_notice
 
-    Sort_notice: db 0xa, 0xa, "S----- BEGINNING OF SORTED DATA -----", 0xA, 0x0
+    Sort_notice: db 0xa, 0xa, "----- BEGINNING OF SORTED DATA -----", 0xA, 0x0
     Sort_notice_L: equ $ - Sort_notice
 
     sockaddr_in: 
         istruc sockaddr_in_type 
 
             at sockaddr_in_type.sin_family,  dw 0x02            ;AF_INET -> 2 
-            at sockaddr_in_type.sin_port,    dw 0xE027          ;port in hex and big endian order, 10206 -> 0xDE27 
+            at sockaddr_in_type.sin_port,    dw 0xDE27          ;port in hex and big endian order, 10206 -> 0xDE27 
             at sockaddr_in_type.sin_addr,    dd 0xB886EE8C      ;address 140.238.134.184 -> 0xB886EE8C
 
         iend
