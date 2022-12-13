@@ -35,7 +35,7 @@ global _start
 _start:
     call _network                           ; Establish socket and connection to server
 
-    call _client                            ; Prompt user for # of requested bytes and send request to server
+    call _client.prompt                     ; Prompt user for # of requested bytes and send request to server
 
     call _asciiToHex                        ; Convert the # of requested bytes from ascii to hex
     mov [array_length], rax                 ; Save return value from _asciiToHex (value of the # of bytes requested)
@@ -47,15 +47,15 @@ _start:
     call _memory_allocation
     mov [output_array_ptr], rax             ; Save the return value from memory allocation function (created array for sorted output)
 
-    call _client.read_from_the_socket       ; Read bytes random bytes that were sent from the server into random_array_ptr array
+    call _client.read_from_the_socket       ; Read random bytes that were sent from the server into random_array_ptr array
 
-    call _sort                              ; Use counting sort to store the data. Output is in output_array_ptr
+    call _sort                              ; Use counting sort to sort the data. Output is in output_array_ptr
     
     call _file_output                       ; Print output to the file
 
-    add rsp, 0x8                           ; Cleaning up the stack
+    add rsp, 0x8                            ; Clean up the stack
 
-    jmp _exit                               ; Close file descriptors / socket and clean up the heap
+    jmp _exit                               ; Close file descriptors / socket, clean up the heap and exit
 
 _network:
         push rbp                            ; Prologue
@@ -171,29 +171,20 @@ _client:
 
 
 _sort:
-    push rbp                            ; Prologue
+    push rbp                                ; Prologue
     mov rbp, rsp
     
-    mov r13, [random_array_ptr]
-
-    xor rax, rax
-    xor rbx, rbx
-    xor rcx, rcx
-    xor r8, r8
-    xor r9, r9,
-    xor r10, r10
-    xor r11, r11
-
+    mov r13, [random_array_ptr]             ; Load the input array into r13
 
     ; LOOP 1 
-    ; Find the max value in the array
+    ; Find the max value in the input array
     xor rbx, rbx
     xor r10, r10
-    mov r8, 0x01                             ; Set the counter to one (first element will be set to the max already)
+    mov r8, 0x01                            ; Set the counter to one (first element will be set to the max already)
     mov bl, byte [r13]                      ; Set the first value as the max (bl is the max value holder)
     .MaxLoop:
         mov r10b, byte [r13 + r8] 
-        cmp rbx, r10             ; Compare the current array value to the current max value
+        cmp rbx, r10                        ; Compare the current array value to the current max value
         jae .MaxLoopSkip                    ; If the max value is greater than or equal to then skip
         mov bl, byte [r13 + r8]             ; Else set new max value in bl
         .MaxLoopSkip:
@@ -211,11 +202,10 @@ _sort:
     ; MEMORY CREATION FOR COUNT ARRAY
     ; Dynamically create an array "count" of the size of the maximum value in the array (Each array position in count will represent each value in the original array) 
     call _memory_allocation
-    mov r15, rax                            ; Save the return value from mmap into r15 to access the array for counting values
-    xor rax, rax                            ; Clear rax for use later
+    mov r15, rax                            ; Save the return value from mmap into r15 (r15 is the count array)
 
-    ; Setting all values from fresh array to zero
-    mov r8, 0x0
+    ; Setting all values in new count array to zero
+    xor r8, r8
     .ClearCount:
         mov [r15 + r8], dword 0x0
         cmp r8, [array_length]
@@ -224,74 +214,65 @@ _sort:
         jmp .ClearCount
         .ClearCountEnd:
 
-
-
     ; LOOP 2
-    ; Increment the count of occurences in the count array at each values position respective position in the array (eg 4 -> count[4]++)
-    mov r8, 0x0                             ; Set counter to zero
+    ; Increment the count of occurences in the count array (r15) at each values position respective position in the array (eg 4 -> count[4]++)
     xor rcx, rcx
+    xor r8, r8                              ; Set counter to zero
     mov r9, [array_length]                  ; Load r9 with the number of characters
     dec r9                                  ; Subtract 1 from r9 (zero indexing)
     .CountLoop:
         xor rbx, rbx
-        mov bl, byte [r13 + r8]             ; Get current value from the main array
+        mov bl, byte [r13 + r8]             ; Get current value from the input array (r13)
         imul rbx, 0x4
-        mov ecx, [r15 + rbx]            ; Use current value to access its literal index in the count array (# of occurences for each val at their respective locations)
-        inc ecx
-                                    ; Increase the count of the number of occurences of the current value by 1
-        mov [r15 + rbx], ecx                 ; Replace old value with incremented occurences count value
+        mov ecx, [r15 + rbx]                ; Use current value to access its literal index in the count array (# of occurences for each val at their respective locations)
+        inc ecx                             ; Increase the count of the number of occurences of the current value by 1
+        mov [r15 + rbx], ecx                ; Replace old value with incremented occurences count value
         cmp r8, r9                          ; Check to see if the end of the array has been reached
-        jge .CountLoopEnd                   ; End if yes, if no increment and repeat
+        jge .CountLoopEnd                   ; End if equal or greater, if no increment and repeat
         add r8, 0x1  
         jmp .CountLoop
         .CountLoopEnd:
 
 
     ; LOOP 3
-    ; Perform running count of count array (add every previous index to the current index)
-
-    mov r9, [max_value]
-    imul r9, 0x4
-    mov r8, 0x4                             ; Counter, start at 1 because we will be adding the previous value to the current value
+    ; Perform running count of count array (add every previous index to the current index in count array (r15))
     xor rbx, rbx
+    mov r9, [max_value]
+    imul r9, 0x4                            ; Multiply our max value by four because our count array (r15) is indexed by 4 bytes at a time (dword)
+    mov r8, 0x4                             ; Counter, start at 4 (index 1) because we will be adding the previous value to the current value
     .RunningCountLoop:                  
-        mov eax, [r15 + r8]             ; Get the current number of occurences at the given index in count array
-        mov ebx, [r15 + r8 - 4]          ; Get the number of occurences at the previous index
-        add eax, ebx                          ; Add the values together
-        mov [r15 + r8], eax                  ; Load sum into current index
-
-        cmp r8, r9                ; Compare against the maximum value in the array from earlier
-        jge .RunningCountLoopEnd
-        add r8, 0x4                              ; Increment the counter 
-        jmp .RunningCountLoop               ; Repeat
+        mov eax, [r15 + r8]                 ; Get the current number of occurences at the given index in count array (r15)
+        mov ebx, [r15 + r8 - 4]             ; Get the number of occurences at the previous index
+        add eax, ebx                        ; Add the values together
+        mov [r15 + r8], eax                 ; Load sum into current index in count array
+        cmp r8, r9                          ; Compare against the maximum value of the input array
+        jge .RunningCountLoopEnd            ; If at end of array then leave loop
+        add r8, 0x4                         ; Increment the counter by 4 (count array r15 is indexed as dword array)
+        jmp .RunningCountLoop               
         .RunningCountLoopEnd:
 
-
-
-
     ; LOOP 4
-    ; Go back through the array, go to each values position in the count array and put it in the output array at the sum position held in the count array
-    mov r14, [output_array_ptr]
-    mov r8, 0x0                                 
+    ; Go back through the array, go to each values position in the count array (r15) and put it in the output array (r14) at the sum position held in the count array for that value
+    xor r8, r8                              ; Set counter to zero
+    mov r14, [output_array_ptr]             ; Load r14 with our output array                           
     .InsertionLoop:
         xor rcx, rcx
         xor rbx, rbx
         xor rdx, rdx
-        mov cl, byte [r13 + r8]             ; Load the value from the current array position in original input array into al
-        mov rdx, rcx
-        imul rcx, 0x4
-        mov ebx, [r15 + rcx]            ; Use the array value to access its corresponding cummulative value in the count array
-        mov byte [r14 + rbx - 1], dl             ; Insert this value into the output array at the index of the cumulative value from above (-1 cause zero indexing)
-        dec rbx                              ; Decrement the cumulative value
-        mov [r15 + rcx], ebx                 ; Return decremented cumulative value to count array (means next time we won't put the same value in the same position)
-
-        cmp r8, [array_length]                         ; If counter is zero (at last element) end the loop, else decrement and repeat
+        mov cl, byte [r13 + r8]             ; Load the value from the current array position in original input array (r13) into cl
+        mov rdx, rcx                        ; Make a copy of the byte
+        imul rcx, 0x4                       ; Multiply by 4 cause r15 is a dword array
+        mov ebx, [r15 + rcx]                ; Use the array value to access its corresponding cummulative value in the count array
+        mov byte [r14 + rbx - 1], dl        ; Insert the value from input array into the output array at the index of the cumulative count for that value (-1 cause zero indexing)
+        dec rbx                             ; Decrement the cumulative value
+        mov [r15 + rcx], ebx                ; Return decremented cumulative value to count array (means next time we won't put the same value in the same position)
+        cmp r8, [array_length]              ; If counter is equal to array length (at last element) end the loop, else increment and repeat
         jge .InsertionLoopEnd
-        inc r8                              ; Decrement counter
+        inc r8                              ; Increment counter
         jmp .InsertionLoop                  ; Repeat
         .InsertionLoopEnd:
 
-                                            ; length of count array to pass to memory free is already loaded on the stack (push rbx, after loop 1)
+                                            ; length of count array to pass to _memory_free is already loaded on the stack (push rbx was after loop 1)
     push r15                                ; Pass pointer to start of count array
     call _memory_free                       ; Free the created count array
 
