@@ -76,7 +76,7 @@ section .data
 
 section .bss
     ; global variables
-    array_ptr: resb 0x600               
+    array_ptr: resq 1                           ; buffer to store the byte from server               
     socket_fd:  resq 1                          ; socket file descriptor
     output_fd: resb 1                           ; output.txt file descriptor
     byte_buffer: resb 4                         ; buffer for the user entered bytes
