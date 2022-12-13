@@ -99,29 +99,33 @@ _start:
     jmp _exit
 
 _socket:
-    ; Initialize socket, based on IF_INET to get tcp
-    mov rax, 0x29                       ; socket syscall
-    mov rdi, 0x02                       ; int domain - AF_INET = 2, AF_LOCAL = 1
-    mov rsi, 0x01                       ; int type - SOCK_STREAM = 1
-    mov rdx, 0x00                       ; int protocol is 0
+    ; Initialize socket
+    mov rax, 0x29                               ; socket syscall
+    mov rdi, 0x02                               ; int domain - AF_INET = 2, AF_LOCAL = 1
+    mov rsi, 0x01                               ; int type - SOCK_STREAM = 1
+    mov rdx, 0x00                               ; int protocol is 0
     syscall     
     cmp rax, 0x00
-    jl _socket_failed                   ; jump if negative
-    mov [socket_fd], rax                ; save the socket fd to basepointer
+    jl _socket_failed                           ; if rax < 0, socket not created
+    mov [socket_fd], rax                        ; save the socket file descriptor to buffer
     call _socket_created
 
     ; int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-    mov rax, 0x2A                        ; connect syscall
-    mov rdi, qword [socket_fd]
-    mov rsi, sockaddr_in
-    mov rdx, sockaddr_in_l
+    mov rax, 0x2A                               ; connect syscall
+    mov rdi, qword [socket_fd]                  ; socket file descriptor
+    mov rsi, sockaddr_in                        ; get server IP address and port number
+    mov rdx, sockaddr_in_l                      ; address length
     syscall
-    cmp rax, 0x00
-    jl _connection_failed
+    cmp rax, 0x00                               
+    jl _connection_failed                       ; if rax < 0, connection failed to be created
     call _connection_created
     ret
 
 _get_input:
+    ; Epilogue
+    push rbp
+    mov rbp, rsp
+
     ; ask to enter number of bytes   
     push byte_msg_l
     push byte_msg
@@ -133,6 +137,10 @@ _get_input:
     mov rsi, byte_buffer
     mov rdx, 0x04
     syscall
+
+    ; Prologue
+    mov rsp, rbp
+    pop rbp
     ret
 
 _get_length:
@@ -179,26 +187,24 @@ _send_rec:
     push rbp
     mov rbp, rsp
 
-    ; based on sendto syscall
-    mov rax, 0x2C                       ; sendmsg syscall
-    mov rdi, [socket_fd]                ; int fd
-    mov rsi, byte_buffer                ; int type - SOCK_STREAM = 1
-    mov rdx, 0x04               ; int protocol is 0
+    mov rax, 0x2C                           ; sendmsg syscall
+    mov rdi, [socket_fd]                    ; socket file descriptor
+    mov rsi, byte_buffer                    ; number of bytes requested
+    mov rdx, 0x04                           ; length of message
     mov r10, MSG_DONTWAIT
     mov r8, sockaddr_in
     mov r9, sockaddr_in_l
     syscall
 
-    ; using receivefrom syscall
-    mov rax, 0x2D
-    mov rdi, [socket_fd]
-    mov rsi, array_ptr
-    mov rdx, [byte_length]                ; must match the requested number of bytes
-    mov r10, MSG_WAITALL                ; important
+    mov rax, 0x2D                           ; receivefrom syscall
+    mov rdi, [socket_fd]                    ; socket file descriptor
+    mov rsi, array_ptr                      ; save the bytes into buffer
+    mov rdx, [byte_length]                  ; length of bytes to be saved
+    mov r10, MSG_WAITALL                
     mov r8, 0x00
     mov r9, 0x00
     syscall
-    .rec:                               ; setup break in gdb by "b _send_rec.rec" to examine the buffer
+    .rec:                                  ; setup break in gdb by "b _send_rec.rec" to examine the buffer
     ; your array_ptr will now be filled with 0x100 bytes
     
     ; Prologue
@@ -212,40 +218,39 @@ _file:
     mov rbp, rsp
 
     ; Create and open new output file
-    mov   rax, 0x2              ; Open syscall
-    mov   rdi, file_name        ; File name
-    mov   rsi, 0x441            ; O_CREAT| O_WRONLY | O_APPEND
-    mov   edx, 0q666            ; octal permissions in case O_CREAT has to create it
+    mov   rax, 0x2                          ; Open syscall
+    mov   rdi, file_name                    ; File name (output.txt)
+    mov   rsi, 0x441                        ; O_CREAT| O_WRONLY | O_APPEND
+    mov   edx, 0q666                        ; octal permissions in case O_CREAT has to create it
     syscall
+    cmp rax, 0x00                           ; If rax < 0, file not created
     jl _file_not_created
-    mov [output_fd], rax
+    mov [output_fd], rax                    ; save file descriptor to buffer
 
-     ; Write to file "beginning of random data"
-    mov rsi, file_msg1              ; message to write ("Random data")  
-    mov rdx, file_msg1_l            ; number of bytes 
+    mov rsi, file_msg1                      ; message to write ("beginning of random data")  
+    mov rdx, file_msg1_l                    ; length of message 
     call _write_to_file  
 
     mov [byte_length], rbx
-    mov rsi, array_ptr
-    mov rdx, [byte_length]
+    mov rsi, array_ptr                      ; write the random byte to file
+    mov rdx, [byte_length]                  ; length of array_ptr
     call _write_to_file
     
-    ; Write to file "beginning of manipulated data"
-    mov rsi, file_msg2              ; message to write ("Random data")  
-    mov rdx, file_msg2_l            ; number of bytes 
+    mov rsi, file_msg2                      ; message to write ("beginning of manipulated data")  
+    mov rdx, file_msg2_l                    ; length of message 
     call _write_to_file 
 
-    call _insertion_sort        ; Call function to sort bytes in buffer
-    mov rsi, array_ptr
-    mov rdx, [byte_length]
+    call _insertion_sort                    ; Call function to sort bytes in buffer
+    mov rsi, array_ptr                      ; write the sorted bytes to file
+    mov rdx, [byte_length]                  ; length of array_ptr
     call _write_to_file
-    cmp rax, 0x00
+    cmp rax, 0x00                           ; If rax is less than 0, data not written to file
     jl _write_fail
     call _write_success
 
     ; Close file
-    mov rax, 0x3                ; close syscall
-    mov rdi, qword [output_fd]     
+    mov rax, 0x3                            ; close syscall
+    mov rdi, qword [output_fd]              ; file descriptor   
     syscall
 
     ; Prologue
@@ -258,8 +263,8 @@ _write_to_file:
     push rbp
     mov rbp, rsp
 
-    mov	rax, 0x01               ; sys_write
-    mov	rdi, [output_fd]        ; file descriptor
+    mov	rax, 0x01                           ; sys_write
+    mov	rdi, [output_fd]                    ; file descriptor
     syscall
 
     ; Prologue
@@ -272,41 +277,41 @@ _insertion_sort:
     push rbp
     mov rbp, rsp
 
-    xor r8, r8                      ; r8 = i (intialize)
-    xor r9, r9                      ; r9 = j (intialize)
-    xor rax, rax                    ; rax = key (initialize)
-    mov r11, [byte_length]            ; array length (n)
+    xor r8, r8                              ; r8 = i (intialize)
+    xor r9, r9                              ; r9 = j (intialize)
+    xor rax, rax                            ; rax = key (initialize)
+    mov r11, [byte_length]                  ; array_ptr length (n)
 
-    mov r8, 0x01                    ; i = 1
+    mov r8, 0x01                            ; i = 1
 
     ; for (i = 1; i < n; i++)
     _for_loop:
         cmp r8, r11                         ; if i >= n, stop the loop
         jge end_for_loop
 
-        lea rcx, [array_ptr+r8]            ; key = array[i]
-        mov al, byte [rcx]                  ; al = key
-        mov r9, r8                          ; j = i - 1;
-        dec r9
+        lea rcx, [array_ptr+r8]             ; Get byte at position array_ptr[i]
+        mov al, byte [rcx]                  ; key = al
+        mov r9, r8                          ; j = i
+        dec r9                              ; decrement j by 1
 
-        ; while(j >= 0 && array[j] > key)
+        ; while(j >= 0 && array_ptr[j] > key)
         _while_loop:
             cmp r9, 0x00                    ; if j < 0, then stop this loop
             jl end_while_loop
-            lea rcx, [array_ptr+r9]
-            mov dl, byte [rcx]              ; dl = array[j]
-            cmp dl, al                      ; if array[j] <= key, stop this loop
+            lea rcx, [array_ptr+r9]         ; Get byte at position array_ptr[j]
+            mov dl, byte [rcx]              ; dl = array_ptr[j]
+            cmp dl, al                      ; if array_ptr[j] <= key, stop this loop
             jle end_while_loop
           
-            mov [array_ptr+r9+1], byte dl  ; array[j+1] = array[j]         
-            dec r9                          ; j = j-1
+            mov [array_ptr+r9+1], byte dl   ; If not, then move byte at array_ptr[j+1] to position array_ptr[j]         
+            dec r9                          ; Decrement j by 1
 
-            jmp _while_loop
+            jmp _while_loop                 ; Keep looping until j < 0 and array_ptr <= key
 
         end_while_loop:
-            mov [array_ptr+r9+1], byte al  ; array[j+1] = key
-            inc r8                          ; i++
-            jmp _for_loop                   ; Loop for next position in array        ; Loop for next position in array
+            mov [array_ptr+r9+1], byte al   ; When the while loop ends, the key is moved to position array_ptr[j+1] 
+            inc r8                          ; i is incremented by 1
+            jmp _for_loop                   ; Loop for next position in array
 
     end_for_loop:
         ; Prologue
@@ -397,12 +402,14 @@ _connection_failed:
     jmp _exit
 
 _connection_created:
+    ; print connection created
     push connection_t_msg_l
     push connection_t_msg
     call _print
     ret
 
 _file_not_created:
+    ; print file was not created
     push file_f_msg_l
     push file_f_msg
     call _print
@@ -416,6 +423,7 @@ _write_success:
     ret
 
 _write_fail:
+    ; Write to stdout that bytes were not written to file
     push write_f_len
     push write_f
     call _print
