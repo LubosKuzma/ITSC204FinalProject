@@ -123,7 +123,6 @@ _socket:
     cmp rax, 0x00                               
     jl _connection_failed                       ; if rax < 0, connection failed to be created
     call _connection_created
-    ret
     
     ; Epilogue
     mov rsp, rbp
