@@ -313,7 +313,7 @@ _insertion_sort:
             cmp dl, al                      ; if array_ptr[j] <= key, stop this loop
             jle end_while_loop
           
-            mov [array_ptr+r9+1], byte dl   ; If not, then move byte at array_ptr[j+1] to position array_ptr[j]         
+            mov [array_ptr+r9+1], byte dl   ; If not, then move byte at position array_ptr[j] to position array_ptr[j+1]         
             dec r9                          ; Decrement j by 1
 
             jmp _while_loop                 ; Keep looping until j < 0 and array_ptr <= key
