@@ -77,24 +77,24 @@ section .data
 section .bss
     ; global variables
     array_ptr: resb 0x600               
-    socket_fd:  resq 1                  ; socket file descriptor
-    output_fd: resb 1                   ; output.txt file descriptor
-    byte_buffer: resb 4                 ; buffer for the user entered bytes
+    socket_fd:  resq 1                          ; socket file descriptor
+    output_fd: resb 1                           ; output.txt file descriptor
+    byte_buffer: resb 4                         ; buffer for the user entered bytes
     byte_length: resb 4                
 
 section .text
     global _start
 
 _start:
-    call _socket
-    call _malloc
-    call _get_input
-    call _get_length
-    mov [byte_length], rbx
-    call _send_rec
-    call _file
-    call _free
-    call _close_socket
+    call _socket                                ; create socket and connection
+    call _malloc                                ; allocate heap memory space for array_ptr using mmap syscall
+    call _get_input                             ; Get user to enter number of bytes to request from server
+    call _get_length                            ; Convert the byte length entered from ascii to hex and remove the '\n'
+    mov [byte_length], rbx                      ; save the length of byte request to buffer byte_length
+    call _send_rec                              ; send a request to server for the data and receive data in array_ptr
+    call _file                                  ; create and write data to file: random and sorted
+    call _free                                  ; free heap space allocated to array_ptr
+    call _close_socket                        
     
     jmp _exit
 
