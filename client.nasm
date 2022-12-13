@@ -374,14 +374,11 @@ _print:
     mov rbp, rsp
     push rdi
     push rsi
-
-    ; [rbp + 0x10] -> buffer pointer
-    ; [rbp + 0x18] -> buffer length
     
     mov rax, 0x1
     mov rdi, 0x1
-    mov rsi, [rbp + 0x10]
-    mov rdx, [rbp + 0x18]
+    mov rsi, [rbp + 0x10]            ; [rbp + 0x10] -> buffer pointer
+    mov rdx, [rbp + 0x18]            ; [rbp + 0x18] -> buffer length
     syscall
 
     ; Epilogue
