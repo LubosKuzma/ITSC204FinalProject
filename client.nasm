@@ -58,25 +58,25 @@ section .data
     write_f: db "Requested bytes failed to be written to file: output.txt", 0xA, 0x00
     write_f_len: equ $ - write_f
 
-    file_msg1: db "-----------BEGINNING OF RANDOM DATA------------", 0xA, 0x00
+    file_msg1: db 0xA, "-----------BEGINNING OF RANDOM DATA------------", 0xA, 0x00
     file_msg1_l: equ $ - file_msg1
 
-    file_msg2: db 0xA, "-----------BEGINNING OF MANIPULATED DATA------------", 0xA, 0x00
+    file_msg2: db 0xA, 0xA, "-----------BEGINNING OF MANIPULATED DATA------------", 0xA, 0x00
     file_msg2_l: equ $ - file_msg2
 
     sockaddr_in: 
         istruc sockaddr_in_type 
 
             at sockaddr_in_type.sin_family,  dw 0x02            ; AF_INET -> 2 
-            at sockaddr_in_type.sin_port,    dw 0xD927          ; port: 10201 equals D927 in big endian
-            at sockaddr_in_type.sin_addr,    dd 0xB886EE8C      ; IP address: 140.238.134.184
+            at sockaddr_in_type.sin_port,    dw 0x901F          ; port: 10201 equals D927 in big endian
+            at sockaddr_in_type.sin_addr,    dd 0x00            ; IP address: 140.238.134.184
 
         iend
     sockaddr_in_l: equ $ - sockaddr_in
 
 section .bss
     ; global variables
-    array_ptr: resq 1                           ; buffer to store the byte from server               
+    array_ptr: resq 0x600                       ; buffer to store the byte from server               
     socket_fd:  resq 1                          ; socket file descriptor
     output_fd: resb 1                           ; output.txt file descriptor
     byte_buffer: resb 4                         ; buffer for the user entered bytes
@@ -86,7 +86,7 @@ section .text
     global _start
 
 _start:
-    call _socket                                ; create socket and connection
+    call _socket_and_connection                 ; create socket and connection
     call _malloc                                ; allocate heap memory space for array_ptr using mmap syscall
     call _get_input                             ; Get user to enter number of bytes to request from server
     call _get_length                            ; Convert the byte length entered from ascii to hex and remove the '\n'
@@ -98,7 +98,7 @@ _start:
     
     jmp _exit
 
-_socket:
+_socket_and_connection:
     ; Prologue
     push rbp
     mov rbp, rsp
@@ -135,13 +135,15 @@ _get_input:
     mov rbp, rsp
 
     ; ask to enter number of bytes   
-    push byte_msg_l
-    push byte_msg
-    call _print
+    mov rax, 0x01                               ; Write syscall
+    mov rdi, 0x01                               ; stdout fd    
+    mov rsi, byte_msg
+    mov rdx, byte_msg_l
+    syscall
 
     ; Get user input for number of bytes
     mov rax, 0x00                               ; Read syscall
-    mov rdi, 0x00                               ; stdout
+    mov rdi, 0x00                               ; stdin fd
     mov rsi, byte_buffer
     mov rdx, 0x04
     syscall
@@ -313,7 +315,7 @@ _insertion_sort:
             cmp dl, al                      ; if array_ptr[j] <= key, stop this loop
             jle end_while_loop
           
-            mov [array_ptr+r9+1], byte dl   ; If not, then move byte at position array_ptr[j] to position array_ptr[j+1]         
+            mov [array_ptr+r9+1], byte dl   ; If not, then move byte at array_ptr[j+1] to position array_ptr[j]         
             dec r9                          ; Decrement j by 1
 
             jmp _while_loop                 ; Keep looping until j < 0 and array_ptr <= key
@@ -374,11 +376,14 @@ _print:
     mov rbp, rsp
     push rdi
     push rsi
+
+    ; [rbp + 0x10] -> buffer pointer
+    ; [rbp + 0x18] -> buffer length
     
     mov rax, 0x1
     mov rdi, 0x1
-    mov rsi, [rbp + 0x10]            ; [rbp + 0x10] -> buffer pointer
-    mov rdx, [rbp + 0x18]            ; [rbp + 0x18] -> buffer length
+    mov rsi, [rbp + 0x10]
+    mov rdx, [rbp + 0x18]
     syscall
 
     ; Epilogue
