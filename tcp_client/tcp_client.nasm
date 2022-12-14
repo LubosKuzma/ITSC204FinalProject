@@ -190,8 +190,8 @@ _insertion_sort:
     cmp rdx, 0x00            ; while j >= 0
     jl .end_of_forloop
     mov r8b, byte [r9 + rdx] 
-    cmp rcx, r8              ; and key < array[j]
-    jge .end_of_forloop
+    cmp rcx, r8              ; and key > array[j]
+    jle .end_of_forloop
     mov byte [r9 + rdx + 1], r8b ; array[j + 1] = array[j]
     sub rdx, 0x1             ; j -= 1
     jmp .whileloop
