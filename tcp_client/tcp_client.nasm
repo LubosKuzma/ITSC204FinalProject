@@ -120,7 +120,8 @@ _start:
     push rdx
     push rcx
     push rbx
-    push [array_ptr]
+    mov r8, [array_ptr]
+    push r8
     call _insertion_sort
     add rsp, 0x08
     pop rbx
@@ -169,7 +170,7 @@ _insertion_sort:
     push rdi
     push rsi
 
-    mov r9, [rbp - 0x08]
+    mov r9, [rbp + 0x10]
 
     mov rax, 0x1          ; al = i
     mov rbx, 0x120        ; bl = len(array)
@@ -273,7 +274,6 @@ _exit:
 section .bss
     socket_fd: resq 1
     client_fd: resq 1
-    ;to_send: resb 4
     buffer: resb 1024
     buffer_len: resq 1
     array_ptr resq 1
