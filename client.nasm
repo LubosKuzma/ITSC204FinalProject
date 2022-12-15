@@ -68,8 +68,8 @@ section .data
         istruc sockaddr_in_type 
 
             at sockaddr_in_type.sin_family,  dw 0x02            ; AF_INET -> 2 
-            at sockaddr_in_type.sin_port,    dw 0x901F          ; port: 10201 equals D927 in big endian
-            at sockaddr_in_type.sin_addr,    dd 0x00            ; IP address: 140.238.134.184
+            at sockaddr_in_type.sin_port,    dw 0xD927          ; port: 10201 equals D927 in big endian
+            at sockaddr_in_type.sin_addr,    dd 0xB886EE8C      ; IP address: 140.238.134.184 --> 0xB886EE8C
 
         iend
     sockaddr_in_l: equ $ - sockaddr_in
