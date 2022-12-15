@@ -159,7 +159,7 @@ _get_length:
     mov rbp, rsp
 
     ; Take the user entered number and remove the '\n' from buffer
-    ; and convert ascii to hex to get proper length
+    ; and convert ascii values to hex to get proper length
     mov r8, [byte_buffer]
     mov [byte_length], r8                           ; saves user input to byte_length
     xor r8, r8                                      ; Clear register
@@ -184,14 +184,17 @@ _get_length:
 
 _ascii_to_hex:
 
-    cmp al, 0x39
-    jge skip
-    sub al, 0x30
+    cmp al, 0x39                            ; If number is greater than 9, then jump to skip
+    jg skip
+    sub al, 0x30                            ; Otherwise, subtract 0x30 to get correct hex value
     ret
 
-    skip:
-    sub al, 0x7
-    sub al, 0x30
+    skip:   
+    sub al, 0x7                             ; There are 7 characters in between 9 and A,
+                                            ; so if the ASCII value is greater than 39 hex, 
+                                            ; first subtract 7, so that A to F now correspond
+                                            ; to hex values of 3a hex to 3f hex
+    sub al, 0x30                            ; Then subtract 0x30 to get correct hex value
     ret          
  
 _send_rec:
@@ -233,7 +236,7 @@ _file:
     mov   rax, 0x2                          ; Open syscall
     mov   rdi, file_name                    ; File name (output.txt)
     mov   rsi, 0x441                        ; O_CREAT| O_WRONLY | O_APPEND
-    mov   edx, 0q666                        ; octal permissions in case O_CREAT has to create it
+    mov   edx, 0q666                        ; octal permissions in case O_CREAT has to create the file
     syscall
     cmp rax, 0x00                           ; If rax < 0, file not created
     jl _file_not_created
@@ -308,22 +311,22 @@ _insertion_sort:
 
         ; while(j >= 0 && array_ptr[j] > key)
         _while_loop:
-            cmp r9, 0x00                    ; if j < 0, then stop this loop
+            cmp r9, 0x00                            ; if j < 0, then stop this loop
             jl end_while_loop
-            lea rcx, [array_ptr+r9]         ; Get byte at position array_ptr[j]
-            mov dl, byte [rcx]              ; dl = array_ptr[j]
-            cmp dl, al                      ; if array_ptr[j] <= key, stop this loop
+            lea rcx, [array_ptr+r9]                 ; Get byte at position array_ptr[j]
+            mov dl, byte [rcx]                      ; dl = array_ptr[j]
+            cmp dl, al                              ; if array_ptr[j] <= key, stop this loop
             jle end_while_loop
           
-            mov [array_ptr+r9+1], byte dl   ; If not, then move byte at array_ptr[j+1] to position array_ptr[j]         
-            dec r9                          ; Decrement j by 1
+            mov [array_ptr+r9+1], byte dl           ; If not, then move byte at array_ptr[j] to position array_ptr[j+1]         
+            dec r9                                  ; Decrement j by 1
 
-            jmp _while_loop                 ; Keep looping until j < 0 and array_ptr <= key
+            jmp _while_loop                         ; Keep looping until j < 0 and array_ptr <= key
 
         end_while_loop:
-            mov [array_ptr+r9+1], byte al   ; When the while loop ends, the key is moved to position array_ptr[j+1] 
-            inc r8                          ; i is incremented by 1
-            jmp _for_loop                   ; Loop for next position in array
+            mov [array_ptr+r9+1], byte al           ; When the while loop ends, the key is moved to position array_ptr[j+1] 
+            inc r8                                  ; i is incremented by 1
+            jmp _for_loop                           ; Loop for next position in array
 
     end_for_loop:
         ; Epilogue
