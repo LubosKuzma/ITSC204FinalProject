@@ -2,14 +2,21 @@
 
 This is a repository for **ITSC 204 - Final Project** in Fall 2022.
 
-Every learner is required to do the following:
-- Fork the repo
-- Checkout your designated group's branch
-- Commit often
-- Do Pull Requests to **original** repo (your designated branch) often
-- Have fun
+*** client_v5.nasm is our final code ***
 
-Progress done by Geoffrey
+Things we worked on:
+
+Gurkirat: TCP connection to server, file operations
+
+Bryce: File operations
+
+Sukhmandeep: analysing and review code features, such as C Call Convention
+
+Geoffrey: Quick Sort, debugging client_v4.nasm
+
+***********************************************
+
+Progress record in fork repo by Geoffrey
 
 2022-12-08:
 Created first version of _quickSort
