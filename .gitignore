@@ -4,4 +4,14 @@ authentication.ks
 node_modules
 notes/
 **/*-todo.md
+**/*finalclient.o
+**/*finalclient
+**/*test_server_lh_8080
+**/*test_server_lh_8080.o
 **/*output.txt
+**/*sorting.o
+**/*sorting.output
+**/*sorting.nasm
+**/*output.txt.o
+**/*sorting.o
+**/*sorting

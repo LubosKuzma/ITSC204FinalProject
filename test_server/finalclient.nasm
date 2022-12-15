@@ -8,7 +8,16 @@ struc sockaddr_in_type
     .sin_zero:          resd 2 ; padding(not in use right now )      
 endstruc ;struct end 
 
- 
+NULL equ 0x00
+MAP_SHARED equ 0x01
+MAP_PRIVATE equ 0x02
+MAP_FIXED equ 0x10
+MAP_ANONYMOUS equ 0x20
+PROT_NONE equ 0x00
+PROT_READ equ 0x01
+PROT_WRITE equ 0x02
+PROT_EXEC equ 0x04
+malloc_size equ 0x400
 
 ;*****************************
 SIGPIPE equ 0xD
@@ -18,110 +27,32 @@ NULL    equ 0x0
  
 
 MSG_DONTWAIT equ 0x40
-MSG_WAITALL equ 0x100
+MSG_WAITALL equ 0x100 
+;this is important this tells the client that it must run till this much bytes are recived/send
+
+
 section .bss
     ;global variables 
     msg_biffer:               resb 1024 ; number of bytes to read(i guess) more than this will result in buffer overflow
-    server_live:              resq 1    ; T/F is server connected
     socket_fd:                resq 1    ; socket file descriptor
-    random_byte:             resb 1     ; reserve 1 byte
     chars_received           resq 1     ; number of characters received from socket
-    openfile_fd:            resq 1      ;file discripter for the file that we will be opening to save the bytes 
-    rec_buffer:              resb 0x101
+    openfile_fd:            resq 1     
+    rec_buffer:              resb 0x101 ;record buffer that will eventually save thedata from the heap
+    
 
  
-
 section .text
 global _start: 
 
- 
-
 _start:
 
- 
-
-     ; set the SIGPIPE signal to ignore
-    mov rdi, rsp
-    push SIG_IGN        ; new action -> SIG_IGN 
-    mov rsi, rsp        ; pointer to action struct
-    mov edx, NULL       ; old action -> NULL
-    mov edi, SIGPIPE    ; SIGPIPE    
-    mov rax, 0xD        ; rt_sigaction syscall
-    mov r10, 0x8        ; size of struc (8 bytes)
-    syscall
-
- 
-
-    add rsp, 0x8        ; restore stack
-
- 
 
     push rbp ;pushing the base pointer 
     mov rbp, rsp ;copying the stack pointer to the base poiner 
-    call _network.init
-    call _send_rec
+    
 
  
 
-
-section .data
-
- 
-
-
-    socket_f_msg:   db "Socket failed to be created.", 0xA, 0x0
-    socket_f_msg_l: equ $ - socket_f_msg
-
- 
-
-    socket_t_msg:   db "Socket created.", 0xA, 0x0
-    socket_t_msg_l: equ $ - socket_t_msg
-
- 
-
-    listen_f_msg:   db "Failed to start listening.", 0xA, 0x0
-    listen_f_msg_l: equ $ - listen_f_msg
-
- 
-
-    listen_t_msg:   db "Listening.", 0xA, 0x0
-    listen_t_msg_l: equ $ - listen_t_msg
-
- 
-
-    connect_f_msg:   db "Socket failed to bind.", 0xA, 0x0
-    connect_f_msg_l: equ $ - connect_f_msg
-
- 
-
-    connect_t_msg:   db "Socket bound.", 0xA, 0x0
-    connect_t_msg_l: equ $ - connect_t_msg
-
- 
-
-    send_command:   db "100", 0xA   ; DO NOT TERMINATE WITH 0x00
-    send_command_l: equ $ - send_command
-;passing the values to the variables(so called) in the struct that we initialized before
-    sockaddr_in: 
-            istruc sockaddr_in_type 
-
- 
-
-                at sockaddr_in_type.sin_family,  dw 0x02            ;AF_INET -> 2 ;
-                at sockaddr_in_type.sin_port,    dw 0xDB27          ;(DEFAULT, passed on stack) port in hex and big endian order, 10203 -> 0xDB27
-                at sockaddr_in_type.sin_addr,    dd 0xB886EE8C    ;(DEFAULT) 00 -> any address, address - 140.238.134.184 -> 0xA81BD8A620 (here the adress of the server we wil be connecting to)
-
- 
-
-            iend
-        sockaddr_in_l:  equ $ - sockaddr_in
-
- 
-
- 
-
-_network:
-    .init:
         ; socket, based on IF_INET to get tcp
         mov rax, 0x29          ; socket syscall(creating a socket)
         mov rdi, 0x02          ; int domain - AF_INET = 2, AF_LOCAL = 1 (2 because we are dealing with internet socket)
@@ -131,45 +62,104 @@ _network:
         ;after this syscall the rax register willl have the file discripter 
         ;now always check the rax register must be 3 or more cannot be (0,1,2)
         cmp rax, 0x00           ;compairing to check if it is zero or not 
-        jl _socket_failed                 ; jump if negative
+        jl _socket_failed                 ; jump if negative (printing socket failed)
         mov [socket_fd], rax              ; else save the socket fd to basepointer
-        call _socket_created
+        call _socket_created               ;printing socket connected 
     
         mov rax, 0x2A                       ; connetction syscall
-        mov rdi, qword [socket_fd]          ; sfd
+        mov rdi, qword [socket_fd]          ; socket file discripter 
         mov rsi, sockaddr_in                ; sockaddr struct pointer
         mov rdx, sockaddr_in_l              ; address length 
         syscall
-        cmp rax, 0x00
-        jl _connection_failed
-        call _connection_created
-
- 
-
-_send_rec:
-    ; based on sendto syscall
-    mov rax, 0x2C                       ; sendmsg syscall
-    mov rdi, [socket_fd]                       ; int fd
-    mov rsi, send_command                      ; int type - SOCK_STREAM = 1
-    mov rdx, send_command_l                       ; int protocol is 0
-    mov r10, MSG_DONTWAIT
-    mov r8, sockaddr_in
-    mov r9, sockaddr_in_l
-    syscall
+        cmp rax, 0x00   ;compairig the value of the file descripter
+        jl _connection_failed   ;jump if the value is lower than 0 and printing connection failed 
+        call _connection_created ;else priting connection established 
   
-    ; using receivefrom syscall
-    mov rax, 0x2D
-    mov rdi, [socket_fd]
-    mov rsi, rec_buffer
-    mov rdx, 0x100                      ; must match the requested number of bytes
-    mov r10, MSG_WAITALL                ; important
+  ;setting up malloc for dynamically allocating the memory during the run time 
+  
+
+            ;(void*) malloc(size_t size)
+            ;returns the pointer to the base address of the first byte of the size
+
+   ; malloc (mmap syscall)
+; returns pointer to allocated memory on heap in rax
+    mov rax, 0x9
+    mov rdi, NULL
+    mov rsi, malloc_size
+    mov rdx, PROT_WRITE
+    or rdx, PROT_READ
+    mov r10, MAP_ANONYMOUS
+    or r10, MAP_PRIVATE
     mov r8, 0x00
     mov r9, 0x00
     syscall
-    .rec:                               
-    ; setup break in gdb by "b _send_rec.rec" to examine the buffer
-    ; your rec_buffer will now be filled with 0x100 bytes
-    
+    mov [rec_buffer], rax
+
+ 
+    ;basically this is the syscall that sends our input to the server 
+    mov rax, 0x2C                        ; sendmsg syscall
+    mov rdi, [socket_fd]                 ; int file descripter
+    mov rsi, send_command                ;** int type - SOCK_STREAM = 1 wih the command that we'll be giving 
+    mov rdx, send_command_l              ;** int protocol is 0
+    mov r10, MSG_WAITALL                 ;waite till we send all the bytes  
+    mov r8, sockaddr_in                  ;socket addredd 
+    mov r9, sockaddr_in_l                ;length of socket address 
+    syscall
+  
+    ; using receivefrom syscall
+    mov rax, 0x2d ;recieve sysall 
+    mov rdi, [socket_fd] ;socket file descripter
+    mov rsi, [rec_buffer]; buffer to save the recieved characters 
+    mov rdx, 0x100           ; must match the requested number of bytes to recieve
+    mov r10, MSG_WAITALL     ; important
+    mov r8, 0x00    
+    mov r9, 0x00
+    syscall
+
+    call _print
+
+ ;printing the values to the main screen 
+    mov rax, 0x1
+    mov rdi, 0x1
+    mov rsi, [rec_buffer]
+    mov rdx, 0x100 
+    syscall
+  
+    ;opening a file to write the output to 
+    mov rax, 0x2 ;opening syscall
+    mov rdi, filename ;int *fd
+    mov rsi, 0x222 ;intflags
+    mov rdx, 0777 ;mods 
+    syscall
+
+    mov [openfile_fd], rax ;saving the file fd  
+
+;writing the output into the file
+    mov rax, 0x1 
+    mov rdi, [openfile_fd]
+    mov rsi, [rec_buffer]
+    mov rdx, malloc_size
+    syscall
+
+    ;closing the file opened 
+    mov rax,0x3 ;closing syscall 
+    mov rdi, [openfile_fd]
+
+
+
+
+;freeing up the memory for reaalocation 
+    ;freeing up the memory from the heap does not mean that it will delete
+    ;the memory form the stack .
+    ;it will be on the stack but if we wish to access it .
+    ; it will be unpridictable. 
+
+; free (munmap syscall)
+; returns 0x00 in rax if succesful
+    mov rax, 0xb
+    mov rdi, [rec_buffer]
+    mov rsi, malloc_size
+    syscall
     jmp _exit
 
  
@@ -204,11 +194,7 @@ _print:
 
 
 _exit:
-    ;call _network.close
-    ;call _network.shutdown
-
- 
-
+    
     mov rax, 0x3C       ; sys_exit
     mov rdi, 0x00       ; return code  
     syscall
@@ -248,3 +234,45 @@ _connection_created:
     push connect_t_msg
     call _print
     ret
+
+
+section .data
+
+ 
+
+
+    socket_f_msg:   db "Socket failed to be created.", 0xA, 0x0
+    socket_f_msg_l: equ $ - socket_f_msg
+
+    socket_t_msg:   db "Socket created.", 0xA, 0x0
+    socket_t_msg_l: equ $ - socket_t_msg
+
+    connect_f_msg:   db "connection failed .", 0xA, 0x0
+    connect_f_msg_l: equ $ - connect_f_msg
+
+    connect_t_msg:   db "connection created .", 0xA, 0x0
+    connect_t_msg_l: equ $ - connect_t_msg
+
+    send_command:   db "100", 0xA   ; DO NOT TERMINATE WITH 0x00
+    send_command_l: equ $ - send_command
+
+    filename db "output.txt"
+
+;passing the values to the variables(so called) in the struct that we initialized before
+    sockaddr_in: 
+            istruc sockaddr_in_type 
+
+ 
+
+                at sockaddr_in_type.sin_family,  dw 0x02            ;AF_INET -> 2 ;
+                at sockaddr_in_type.sin_port,    dw 0x901F  ;0xDB27        ;(DEFAULT, passed on stack) port in hex and big endian order, 10203 -> 0xDB27
+                at sockaddr_in_type.sin_addr,    dd 0x0100007F  ;0xB886EE8C   ;(DEFAULT) 00 -> any address, address - 140.238.134.184 -> 0xA81BD8A620 (here the adress of the server we wil be connecting to)
+
+ 
+
+            iend
+        sockaddr_in_l:  equ $ - sockaddr_in
+
+ 
+
+ 
